@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+@layer utilities {
+  /* Standardized Professional Design Tokens for MYRA 2026 */
+  :root {
+    --myra-midnight-navy: #060911;
+    --myra-navy-surface: #090d16;
+    --myra-navy-card: #0d1424;
+    --myra-cyan-primary: #06b6d4;
+    --myra-blue-secondary: #3b82f6;
+  }
+
+  /* Midnight Navy Layout Surfaces */
+  .bg-myra-midnight {
+    background-color: #060911;
+  }
+  .bg-myra-surface {
+    background-color: #090d16;
+  }
+  .bg-myra-card {
+    background-color: #0d1424;
+  }
+
+  /* Electric Cyan & Blue Borders / Accents */
+  .border-myra-cyan {
+    border-color: rgba(6, 182, 212, 0.35);
+  }
+  .border-myra-cyan-strong {
+    border-color: rgba(6, 182, 212, 0.7);
+  }
+  .text-myra-cyan {
+    color: #06b6d4;
+  }
+
+  /* Standardized Midnight Navy Glassmorphism Card */
+  .glass-card {
+    background: linear-gradient(135deg, rgba(13, 20, 36, 0.85), rgba(6, 9, 17, 0.95));
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+  }
+
+  .glass-card-hover {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .glass-card-hover:hover {
+    border-color: rgba(6, 182, 212, 0.6);
+    box-shadow: 0 10px 30px -10px rgba(6, 182, 212, 0.25);
+    transform: translateY(-1px);
+  }
+
+  /* Standardized Holographic Glow Tokens */
+  .hologram-glow-cyan {
+    box-shadow: 0 0 25px -2px rgba(6, 182, 212, 0.4);
+  }
+  .hologram-glow-blue {
+    box-shadow: 0 0 25px -3px rgba(59, 130, 246, 0.35);
+  }
+
+  /* Standardized Modal Overlay */
+  .myra-modal-overlay {
+    background-color: rgba(6, 9, 17, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* Standardized Modal Container Card */
+  .myra-modal-container {
+    background-color: #090d16;
+    border: 1px solid rgba(6, 182, 212, 0.35);
+    box-shadow: 0 0 50px rgba(6, 182, 212, 0.2), 0 25px 60px -15px rgba(0, 0, 0, 0.9);
+  }
+
+  /* Custom Slim Scrollbar */
+  .myra-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .myra-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .myra-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(6, 182, 212, 0.3);
+    border-radius: 9999px;
+  }
+  .myra-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(6, 182, 212, 0.6);
+  }
+}

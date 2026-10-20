@@ -1,0 +1,108 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Security Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // User Profile
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow create, update: if isOwner(userId) && isValidId(userId) &&
+        incoming().uid == userId;
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Connected Devices Subcollection
+      match /devices/{deviceId} {
+        allow get, list: if isOwner(userId) && isValidId(deviceId);
+        allow create: if isOwner(userId) && isValidId(deviceId) &&
+          incoming().userId == userId &&
+          incoming().id == deviceId;
+        allow update: if isOwner(userId) && isValidId(deviceId) &&
+          incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(deviceId);
+      }
+
+      // Device Specific Permissions Subcollection
+      match /permissions/{deviceId} {
+        allow get, list: if isOwner(userId) && isValidId(deviceId);
+        allow create, update: if isOwner(userId) && isValidId(deviceId) &&
+          incoming().userId == userId &&
+          incoming().deviceId == deviceId;
+        allow delete: if isOwner(userId) && isValidId(deviceId);
+      }
+
+      // Pairing Sessions Subcollection (6-digit code or QR)
+      match /pairingSessions/{sessionId} {
+        allow get, list: if isOwner(userId) && isValidId(sessionId);
+        allow create: if isOwner(userId) && isValidId(sessionId) &&
+          incoming().userId == userId;
+        allow update: if isOwner(userId) && isValidId(sessionId) &&
+          incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(sessionId);
+      }
+
+      // Remote Action Commands Subcollection
+      match /commands/{commandId} {
+        allow get, list: if isOwner(userId) && isValidId(commandId);
+        allow create: if isOwner(userId) && isValidId(commandId) &&
+          incoming().userId == userId;
+        allow update: if isOwner(userId) && isValidId(commandId) &&
+          incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(commandId);
+      }
+
+      // Security Audit Logs Subcollection
+      match /auditLogs/{logId} {
+        allow get, list: if isOwner(userId) && isValidId(logId);
+        allow create: if isOwner(userId) && isValidId(logId) &&
+          incoming().userId == userId;
+        allow update, delete: if false; // Audit logs are immutable append-only
+      }
+
+      // MYRA Drop Transfers Subcollection
+      match /dropTransfers/{transferId} {
+        allow get, list: if isOwner(userId) && isValidId(transferId);
+        allow create: if isOwner(userId) && isValidId(transferId) &&
+          incoming().userId == userId;
+        allow update: if isOwner(userId) && isValidId(transferId) &&
+          incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(transferId);
+      }
+
+      // AI Task Handoffs Subcollection
+      match /taskHandoffs/{handoffId} {
+        allow get, list: if isOwner(userId) && isValidId(handoffId);
+        allow create: if isOwner(userId) && isValidId(handoffId) &&
+          incoming().userId == userId;
+        allow update: if isOwner(userId) && isValidId(handoffId) &&
+          incoming().userId == existing().userId;
+        allow delete: if isOwner(userId) && isValidId(handoffId);
+      }
+    }
+  }
+}
