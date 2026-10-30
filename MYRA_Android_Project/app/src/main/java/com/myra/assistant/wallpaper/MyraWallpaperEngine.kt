@@ -1,13 +1,11 @@
 package com.myra.assistant.wallpaper
 
-import android.content.Context
 import android.content.Intent
 import android.graphics.*
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.service.wallpaper.WallpaperService
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import com.myra.assistant.MainActivity
@@ -16,16 +14,17 @@ import kotlin.random.Random
 
 /**
  * Production-ready Android Wallpaper Engine for MYRA Assistant.
- * Correctly inherits from service.Engine() as a non-static inner class of WallpaperService.
+ * Drawing helper delegated to the framework-owned WallpaperService.Engine.
  * Renders real-time 9:16 futuristic AI interface with holographic Earth,
  * rotating HUD rings, breathing MYRA orb, audio waveform aura, radial app icons,
  * bottom portal, and cosmic stardust particles.
  */
-open class MyraWallpaperEngine(
-    protected val service: WallpaperService
-) : service.Engine() {
+class MyraWallpaperEngine(
+    private val service: MyraLiveWallpaperService
+) {
 
     private val prefs = MyraWallpaperPreferences.getInstance(service)
+    private var surfaceHolder: SurfaceHolder? = null
     private val handler = Handler(Looper.getMainLooper())
     private var isVisible = false
     private var width = 1080
@@ -109,37 +108,36 @@ open class MyraWallpaperEngine(
         }
     }
 
-    override fun onCreate(surfaceHolder: SurfaceHolder?) {
-        super.onCreate(surfaceHolder)
+    fun onCreate(holder: SurfaceHolder?) {
+        surfaceHolder = holder
         initParticles()
     }
 
-    override fun onSurfaceChanged(holder: SurfaceHolder?, format: Int, width: Int, height: Int) {
-        super.onSurfaceChanged(holder, format, width, height)
+    fun onSurfaceChanged(holder: SurfaceHolder?, format: Int, width: Int, height: Int) {
+        surfaceHolder = holder
         this.width = width
         this.height = height
         initParticles()
     }
 
-    override fun onVisibilityChanged(visible: Boolean) {
-        super.onVisibilityChanged(visible)
+    fun onVisibilityChanged(visible: Boolean) {
         this.isVisible = visible
         if (visible) {
             lastFrameTime = SystemClock.uptimeMillis()
+            handler.removeCallbacks(drawRunnable)
             handler.post(drawRunnable)
         } else {
             handler.removeCallbacks(drawRunnable)
         }
     }
 
-    override fun onSurfaceDestroyed(holder: SurfaceHolder?) {
-        super.onSurfaceDestroyed(holder)
+    fun onSurfaceDestroyed(holder: SurfaceHolder?) {
         this.isVisible = false
         handler.removeCallbacks(drawRunnable)
+        surfaceHolder = null
     }
 
-    override fun onTouchEvent(event: MotionEvent) {
-        super.onTouchEvent(event)
+    fun onTouchEvent(event: MotionEvent) {
         if (event.action == MotionEvent.ACTION_DOWN) {
             rippleX = event.x
             rippleY = event.y
