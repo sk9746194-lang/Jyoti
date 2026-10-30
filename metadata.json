@@ -1,6 +1,0 @@
-{
-  "name": "MYRA - AI Voice Assistant",
-  "description": "Complete Hindi & Hinglish AI Voice Assistant app with animated AI orb, voice commands, automation missions, tools, and Android system controls.",
-  "requestFramePermissions": ["camera", "microphone", "geolocation"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
