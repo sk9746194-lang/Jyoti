@@ -28,6 +28,7 @@ class GeminiLiveVoiceEngine(
     companion object {
         const val LIVE_MODEL = "models/gemini-3.8-live"
         const val LIVE_VOICE_NAME = "Aoede"
+        const val DEFAULT_SYSTEM_INSTRUCTION = "You are MYRA, a natural, helpful Hindi-first personal voice assistant. Speak conversationally and concisely. Never claim a phone action succeeded unless the Android tool confirms it."
 
         fun buildLiveWebSocketUrl(apiKey: String): String {
             require(apiKey.isNotBlank()) { "Gemini API key is required" }
@@ -47,8 +48,14 @@ class GeminiLiveVoiceEngine(
     private val gson = Gson()
     private var isGoogleBidiEndpoint = false
     @Volatile private var isSetupComplete = false
+    @Volatile private var activeSystemInstruction = DEFAULT_SYSTEM_INSTRUCTION
 
-    fun connect(wsUrl: String, model: String = LIVE_MODEL) {
+    fun connect(
+        wsUrl: String,
+        model: String = LIVE_MODEL,
+        systemInstruction: String = DEFAULT_SYSTEM_INSTRUCTION
+    ) {
+        activeSystemInstruction = systemInstruction.ifBlank { DEFAULT_SYSTEM_INSTRUCTION }
         isGoogleBidiEndpoint = wsUrl.contains("generativelanguage.googleapis.com")
         isSetupComplete = false
 
@@ -67,7 +74,7 @@ class GeminiLiveVoiceEngine(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.i(tag, "Gemini Live WebSocket opened (Google Bidi: $isGoogleBidiEndpoint)")
                 if (isGoogleBidiEndpoint) {
-                    sendGoogleHandshake(webSocket, targetLiveModel)
+                    sendGoogleHandshake(webSocket, targetLiveModel, activeSystemInstruction)
                 } else {
                     isSetupComplete = true
                     onStatusChanged(true, null)
@@ -124,10 +131,10 @@ class GeminiLiveVoiceEngine(
 
     fun reconnect(wsUrl: String) {
         disconnect()
-        connect(wsUrl, LIVE_MODEL)
+        connect(wsUrl, LIVE_MODEL, activeSystemInstruction)
     }
 
-    private fun sendGoogleHandshake(ws: WebSocket, model: String) {
+    private fun sendGoogleHandshake(ws: WebSocket, model: String, systemInstruction: String) {
         val targetModel = if (model.startsWith("models/")) model else "models/$model"
         // Strict guard: ensure gemini-2.5-flash or gemini-2.5-pro is never sent
         val safeModel = if (targetModel.contains("2.5")) LIVE_MODEL else targetModel
@@ -135,6 +142,11 @@ class GeminiLiveVoiceEngine(
         val setupPayload = JSONObject().apply {
             put("setup", JSONObject().apply {
                 put("model", safeModel)
+                put("systemInstruction", JSONObject().apply {
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply { put("text", systemInstruction) })
+                    })
+                })
                 put("generationConfig", JSONObject().apply {
                     put("responseModalities", JSONArray().apply { put("AUDIO") })
                     put("speechConfig", JSONObject().apply {
