@@ -117,7 +117,14 @@ class MyraWakeWordService : Service() {
             try {
                 if (SpeechRecognizer.isRecognitionAvailable(this)) {
                     speechRecognizer?.destroy()
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
+                    speechRecognizer = if (
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                        SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
+                    ) {
+                        SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+                    } else {
+                        SpeechRecognizer.createSpeechRecognizer(this)
+                    }.apply {
                         setRecognitionListener(createListener())
                     }
                     startWakeWordListening()
@@ -143,6 +150,7 @@ class MyraWakeWordService : Service() {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
