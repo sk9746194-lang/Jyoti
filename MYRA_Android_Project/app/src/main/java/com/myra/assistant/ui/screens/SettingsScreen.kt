@@ -78,6 +78,7 @@ fun SettingsScreen(
     var isContinuousVoiceEnabled by remember { mutableStateOf(prefs.isContinuousChatVoiceEnabled) }
     var preferredChatLanguage by remember { mutableStateOf(prefs.preferredChatLanguage) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
+    var showClearMemoryDialog by remember { mutableStateOf(false) }
 
     if (showSecurityScreen) {
         SecurityScreen(onBack = { showSecurityScreen = false })
@@ -1467,7 +1468,18 @@ fun SettingsScreen(
                             Spacer(Modifier.width(6.dp))
                             Text("याद रखें")
                         }
-                        Text("Saved memories: ${savedMemories.size}", color = TextSecondary, fontSize = 11.sp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Saved memories: ${savedMemories.size}", color = TextSecondary, fontSize = 11.sp)
+                            if (savedMemories.isNotEmpty()) {
+                                TextButton(onClick = { showClearMemoryDialog = true }) {
+                                    Text("सभी यादें हटाएँ", color = Color(0xFFF87171), fontSize = 11.sp)
+                                }
+                            }
+                        }
                         savedMemories.forEach { memory ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1546,14 +1558,14 @@ fun SettingsScreen(
     if (showClearHistoryDialog) {
         AlertDialog(
             onDismissRequest = { showClearHistoryDialog = false },
-            title = { Text("Clear Chat History & Memory?", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("This will permanently delete all conversational messages and reset memory across sessions.", color = TextSecondary, fontSize = 13.sp) },
+            title = { Text("Clear Chat History?", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = { Text("यह केवल बातचीत का इतिहास हटाएगा। MYRA Personal Memory में सेव की गई यादें अलग से सुरक्षित रहेंगी।", color = TextSecondary, fontSize = 13.sp) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showClearHistoryDialog = false
                         com.myra.assistant.data.ChatConversationManager.clearHistory(context)
-                        Toast.makeText(context, "Chat history and memory cleared", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Chat history cleared", Toast.LENGTH_SHORT).show()
                     }
                 ) {
                     Text("Clear All", color = Color(0xFFF43F5E), fontWeight = FontWeight.Bold)
@@ -1562,6 +1574,36 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(onClick = { showClearHistoryDialog = false }) {
                     Text("Cancel", color = LightBlue)
+                }
+            },
+            containerColor = Color(0xFF0F1A30),
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    if (showClearMemoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearMemoryDialog = false },
+            title = { Text("सभी Saved Memories हटाएँ?", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = { Text("इससे MYRA Personal Memory में सेव की गई सभी बातें स्थायी रूप से हट जाएँगी। Chat History अलग से सुरक्षित रहेगी।", color = TextSecondary, fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearMemoryDialog = false
+                        if (memoryManager.clearMemories()) {
+                            savedMemories = emptyList()
+                            Toast.makeText(context, "सभी Saved Memories हटा दी गईं।", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Memories हटाई नहीं जा सकीं।", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Text("सभी हटाएँ", color = Color(0xFFF43F5E), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearMemoryDialog = false }) {
+                    Text("रद्द करें", color = LightBlue)
                 }
             },
             containerColor = Color(0xFF0F1A30),
