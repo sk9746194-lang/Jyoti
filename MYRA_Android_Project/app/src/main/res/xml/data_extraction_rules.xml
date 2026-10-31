@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <include domain="sharedpref" path="."/>
+        <!-- Exclude API keys, personal memories, pairing credentials, and secure stores. -->
+        <include domain="sharedpref" path="myra_prefs.xml"/>
+        <include domain="file" path="myra_home_portrait.jpg"/>
     </cloud-backup>
+    <device-transfer>
+        <!-- Sensitive credentials must be re-established on the destination device. -->
+        <include domain="sharedpref" path="myra_prefs.xml"/>
+        <include domain="file" path="myra_home_portrait.jpg"/>
+    </device-transfer>
 </data-extraction-rules>
