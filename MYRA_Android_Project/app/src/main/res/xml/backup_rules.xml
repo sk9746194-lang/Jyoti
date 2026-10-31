@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <include domain="sharedpref" path="."/>
+    <!-- Only non-secret UI preferences and the user-selected home image are backed up. -->
+    <include domain="sharedpref" path="myra_prefs.xml"/>
+    <include domain="file" path="myra_home_portrait.jpg"/>
 </full-backup-content>
