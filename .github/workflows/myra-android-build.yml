@@ -10,7 +10,7 @@ on:
       - ".github/workflows/myra-android-build.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   extract-and-build:
@@ -33,14 +33,28 @@ jobs:
           test -f .myra-ci/MYRA_Android_Project/settings.gradle.kts
           test -f .myra-ci/MYRA_Android_Project/gradlew
           test -f .myra-ci/MYRA_Android_Project/app/build.gradle.kts
+          rm -rf MYRA_Android_Project
+          cp -a .myra-ci/MYRA_Android_Project ./MYRA_Android_Project
           echo "Extracted project files:"
-          find .myra-ci/MYRA_Android_Project -maxdepth 3 -type f | sort | head -100
+          find MYRA_Android_Project -type f | sort
+
+      - name: Commit extracted project into GitHub branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MYRA_Android_Project/
+          if git diff --cached --quiet; then
+            echo "Extracted project is already up to date."
+          else
+            git commit -m "Extract MYRA Android project into repository"
+            git push origin HEAD:myra-android-ci
+          fi
 
       - name: Upload extracted Android project
         uses: actions/upload-artifact@v4
         with:
           name: MYRA-EXTRACTED-ANDROID-SOURCE
-          path: .myra-ci/MYRA_Android_Project/
+          path: MYRA_Android_Project/
           if-no-files-found: error
           retention-days: 30
 
@@ -52,11 +66,16 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          packages: "platform-tools,platforms;android-34,build-tools;34.0.0"
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager --install "platform-tools"
+          sdkmanager --install "platforms;android-34"
+          sdkmanager --install "build-tools;34.0.0"
 
       - name: Build Debug APK
-        working-directory: .myra-ci/MYRA_Android_Project
+        working-directory: MYRA_Android_Project
         run: |
           chmod +x ./gradlew
           ./gradlew --no-daemon --stacktrace :app:clean :app:assembleDebug
@@ -66,6 +85,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MYRA-Assistant-Debug-APK
-          path: .myra-ci/MYRA_Android_Project/app/build/outputs/apk/debug/app-debug.apk
+          path: MYRA_Android_Project/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
