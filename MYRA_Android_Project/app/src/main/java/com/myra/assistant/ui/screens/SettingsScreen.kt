@@ -36,6 +36,7 @@ import com.myra.assistant.R
 import com.myra.assistant.data.AssistantState
 import com.myra.assistant.data.GeminiApiClient
 import com.myra.assistant.data.PreferencesManager
+import com.myra.assistant.data.MyraMemoryManager
 import com.myra.assistant.ui.orb.OrbCustomizationManager
 import com.myra.assistant.ui.orb.OrbRenderer
 import com.myra.assistant.ui.theme.*
@@ -51,6 +52,10 @@ fun SettingsScreen(
     val whatsAppAutomation = remember(context) { WhatsAppAutomation(context) }
     val scope = rememberCoroutineScope()
     val prefs = remember { PreferencesManager(context) }
+    val memoryManager = remember(context) { MyraMemoryManager(context) }
+    var memoryEnabled by remember { mutableStateOf(memoryManager.isEnabled) }
+    var memoryDraft by remember { mutableStateOf("") }
+    var savedMemories by remember { mutableStateOf(memoryManager.getMemories()) }
     val orbManager = remember { OrbCustomizationManager.getInstance(context) }
     val orbSettings by orbManager.settingsState
 
@@ -1313,7 +1318,7 @@ fun SettingsScreen(
 
                                 OutlinedButton(
                                     onClick = {
-                                        isAccessibilityActive = WhatsAppAutomation.isAccessibilityActive(context)
+                                        isAccessibilityActive = whatsAppAutomation.isAccessibilityActive()
                                         Toast.makeText(
                                             context,
                                             if (isAccessibilityActive) "Service is active!" else "Service not enabled yet",
@@ -1384,6 +1389,87 @@ fun SettingsScreen(
                                 fontSize = 10.sp,
                                 lineHeight = 14.sp
                             )
+                        }
+                    }
+                }
+            }
+        }
+
+        // MYRA Personal Memory — user-controlled and encrypted at rest
+        item {
+            Surface(
+                color = CardDark,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, BorderSlate),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("MYRA Personal Memory", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text("आपकी अनुमति से सेव की गई बातें ही MYRA बातचीत में उपयोग करेगी।", color = TextSecondary, fontSize = 11.sp)
+                        }
+                        Switch(
+                            checked = memoryEnabled,
+                            onCheckedChange = {
+                                memoryManager.isEnabled = it
+                                memoryEnabled = it
+                            },
+                            enabled = memoryManager.isStorageAvailable,
+                            colors = SwitchDefaults.colors(checkedThumbColor = LightBlue, checkedTrackColor = PrimaryBlue)
+                        )
+                    }
+                    if (!memoryManager.isStorageAvailable) {
+                        Text("Encrypted memory storage इस डिवाइस पर उपलब्ध नहीं है; सुरक्षा के लिए Memory बंद रखी गई है।", color = Color(0xFFFCA5A5), fontSize = 11.sp)
+                    } else {
+                        OutlinedTextField(
+                            value = memoryDraft,
+                            onValueChange = { memoryDraft = it.take(240) },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = memoryEnabled,
+                            label = { Text("MYRA को क्या याद रखना चाहिए?") },
+                            placeholder = { Text("उदाहरण: मुझे जवाब हिंदी में पसंद हैं") },
+                            minLines = 2,
+                            maxLines = 3
+                        )
+                        Button(
+                            onClick = {
+                                if (memoryManager.saveMemory(memoryDraft)) {
+                                    savedMemories = memoryManager.getMemories()
+                                    memoryDraft = ""
+                                    Toast.makeText(context, "बात सुरक्षित रूप से याद रखी गई।", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Memory सेव नहीं हो सकी। कृपया टेक्स्ट जाँचें।", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            enabled = memoryEnabled && memoryDraft.trim().length >= 3,
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                        ) {
+                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("याद रखें")
+                        }
+                        Text("Saved memories: ${savedMemories.size}", color = TextSecondary, fontSize = 11.sp)
+                        savedMemories.forEach { memory ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(memory.text, color = TextPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                                IconButton(onClick = {
+                                    memoryManager.deleteMemory(memory.id)
+                                    savedMemories = memoryManager.getMemories()
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete memory", tint = Color(0xFFF87171))
+                                }
+                            }
                         }
                     }
                 }
