@@ -41,7 +41,11 @@ class SecureDeviceStore(context: Context) {
         val legacy = prefs.getString("paired_devices_list", null)
         if (!legacy.isNullOrBlank()) {
             val migrated = encryptedPrefs?.edit()?.putString("paired_devices_list", legacy)?.commit() == true
-            if (migrated) prefs.edit().remove("paired_devices_list").apply()
+            // Never retain pairing tokens in plaintext preferences, even if migration fails.
+            prefs.edit().remove("paired_devices_list").apply()
+            if (!migrated) {
+                Log.e("MYRA_ConnectSecurity", "Legacy paired-device credentials could not be encrypted and were discarded. Re-pair devices after secure storage is available.")
+            }
         }
     }
 
