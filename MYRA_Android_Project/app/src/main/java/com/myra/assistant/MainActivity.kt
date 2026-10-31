@@ -33,6 +33,7 @@ import com.myra.assistant.tools.WhatsAppAutomation
 import com.myra.assistant.data.ChatMessage
 import com.myra.assistant.data.ChatConversationManager
 import com.myra.assistant.data.GeminiApiClient
+import com.myra.assistant.data.MyraMemoryManager
 import com.myra.assistant.ui.screens.ChatScreen
 import com.myra.assistant.ui.screens.HomeScreen
 import com.myra.assistant.ui.screens.MainVoiceScreen
