@@ -171,7 +171,7 @@ class MainActivity : FragmentActivity() {
                         val sequenceReplies = mutableListOf<String>()
                         fun executeNextSequenceStep(index: Int) {
                             if (index >= sequence.size) {
-                                val reply = sequenceReplies.joinToString("\\n")
+                                val reply = sequenceReplies.joinToString(System.lineSeparator())
                                 assistantResponse = reply
                                 assistantState = AssistantState.SPEAKING
                                 deviceControl.triggerHapticFeedback("speech_start")
