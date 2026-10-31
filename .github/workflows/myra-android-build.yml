@@ -1,0 +1,65 @@
+name: MYRA Android APK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - myra-android-ci
+    paths:
+      - "MYRA_ANDROID_AUDITED_FINAL.zip"
+      - ".github/workflows/myra-android-build.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "MYRA_ANDROID_AUDITED_FINAL.zip"
+      - ".github/workflows/myra-android-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    name: Extract source and build Debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify source ZIP
+        run: |
+          test -s MYRA_ANDROID_AUDITED_FINAL.zip
+          unzip -t MYRA_ANDROID_AUDITED_FINAL.zip
+
+      - name: Extract MYRA Android project
+        run: |
+          mkdir -p .myra-ci
+          unzip -q MYRA_ANDROID_AUDITED_FINAL.zip -d .myra-ci
+          test -f .myra-ci/MYRA_Android_Project/settings.gradle.kts
+          test -f .myra-ci/MYRA_Android_Project/gradlew
+          echo "MYRA_PROJECT_DIR=$GITHUB_WORKSPACE/.myra-ci/MYRA_Android_Project" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Debug APK
+        working-directory: .myra-ci/MYRA_Android_Project
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace :app:clean :app:assembleDebug
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MYRA-Assistant-Debug-APK
+          path: .myra-ci/MYRA_Android_Project/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
