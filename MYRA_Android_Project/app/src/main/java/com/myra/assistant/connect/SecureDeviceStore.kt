@@ -89,7 +89,7 @@ class SecureDeviceStore(context: Context) {
         }
     }
 
-    fun savePairedDevice(device: PairedDevice) {
+    fun savePairedDevice(device: PairedDevice): Boolean {
         val current = getPairedDevices().toMutableList()
         val index = current.indexOfFirst { it.id == device.id }
         if (index >= 0) {
@@ -97,7 +97,7 @@ class SecureDeviceStore(context: Context) {
         } else {
             current.add(device)
         }
-        saveDevicesList(current)
+        return saveDevicesList(current)
     }
 
     fun getDevice(id: String): PairedDevice? {
@@ -129,9 +129,9 @@ class SecureDeviceStore(context: Context) {
         saveDevicesList(current)
     }
 
-    private fun saveDevicesList(list: List<PairedDevice>) {
+    private fun saveDevicesList(list: List<PairedDevice>): Boolean {
         val json = gson.toJson(list)
-        encryptedPrefs?.edit()?.putString("paired_devices_list", json)?.apply()
+        return encryptedPrefs?.edit()?.putString("paired_devices_list", json)?.commit() == true
     }
 
     // --- Recipient Device Permissions ---
