@@ -135,6 +135,7 @@ class MainActivity : FragmentActivity() {
                 var assistantResponse by remember { mutableStateOf("") }
 
                 val prefs = remember { com.myra.assistant.data.PreferencesManager(this@MainActivity) }
+                val memoryManager = remember { com.myra.assistant.data.MyraMemoryManager(this@MainActivity) }
                 val chatMessages = remember { mutableStateListOf<ChatMessage>() }
                 var isGeneratingChat by remember { mutableStateOf(false) }
                 var isTtsSpeaking by remember { mutableStateOf(false) }
@@ -199,7 +200,8 @@ class MainActivity : FragmentActivity() {
                                 model = prefs.selectedGeminiModel,
                                 conversationHistory = contextHistory,
                                 userPrompt = trimmed,
-                                preferredLanguage = prefs.preferredChatLanguage
+                                preferredLanguage = prefs.preferredChatLanguage,
+                                personalMemoryContext = memoryManager.getContextForPrompt()
                             )
 
                             res.onSuccess { aiReply ->
