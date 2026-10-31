@@ -156,7 +156,7 @@ class MainActivity : FragmentActivity() {
                     // Safe multi-step local automation. Sensitive actions (calls, messages, SOS, lock)
                     // are intentionally excluded and must be issued as individual commands.
                     val sequence = trimmed.split(
-                        Regex("""(?i)\\s+(?:and\\s+then|then|aur\\s+phir|phir|aur|और\\s+फिर|फिर|और)\\s+""")
+                        Regex("""(?i)\s+(?:and\s+then|then|aur\s+phir|phir|aur|और\s+फिर|फिर|और)\s+""")
                     ).map { it.trim() }.filter { it.isNotBlank() }
                     val safeSequenceIntents = setOf(
                         CommandIntent.OPEN_APP,
