@@ -41,7 +41,7 @@ class DevicePairingManager(
                 "&code=$code" +
                 "&secret=$secret"
 
-        Log.d(tag, "Hosting pairing initiated. Code: $code, IP: $localIp")
+        Log.d(tag, "Hosting pairing initiated.")
         return PairingHostInfo(
             pairingCode = code,
             qrPayload = qrData,
@@ -67,7 +67,7 @@ class DevicePairingManager(
         }
 
         if (request.pairingCode != currentCode) {
-            Log.w(tag, "Pairing code mismatch: expected $currentCode, got ${request.pairingCode}")
+            Log.w(tag, "Pairing code mismatch.")
             return PairingResponse(
                 success = false,
                 errorMessage = "Invalid 6-digit pairing code."
@@ -127,7 +127,7 @@ class DevicePairingManager(
                 sharedSecret = secret
             )
         } catch (e: Exception) {
-            Log.e(tag, "Failed to parse QR payload: $rawQr", e)
+            Log.e(tag, "Failed to parse MYRA Connect QR payload.", e)
             null
         }
     }
