@@ -195,6 +195,13 @@ fun SettingsScreen(
                     // API Key Input Field with Show/Hide toggle
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(text = "Gemini API Key", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        if (!prefs.isSecureKeyStorageAvailable) {
+                            Text(
+                                text = "सुरक्षित Key Storage उपलब्ध नहीं है। API Key इस डिवाइस पर सेव नहीं होगी।",
+                                color = Color(0xFFFCA5A5),
+                                fontSize = 11.sp
+                            )
+                        }
                         OutlinedTextField(
                             value = apiKeyInput,
                             onValueChange = { apiKeyInput = it },
@@ -321,7 +328,11 @@ fun SettingsScreen(
                             onClick = {
                                 prefs.geminiApiKey = apiKeyInput
                                 prefs.selectedGeminiModel = selectedModel
-                                Toast.makeText(context, "API Key saved securely on device", Toast.LENGTH_SHORT).show()
+                                if (prefs.hasConfiguredApiKey) {
+                                    Toast.makeText(context, "API Key encrypted and saved on this device.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "सुरक्षित स्टोरेज उपलब्ध नहीं है। API Key सेव नहीं हुई।", Toast.LENGTH_LONG).show()
+                                }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
                             shape = RoundedCornerShape(10.dp),
