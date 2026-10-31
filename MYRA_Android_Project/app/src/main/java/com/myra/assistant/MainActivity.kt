@@ -153,6 +153,47 @@ class MainActivity : FragmentActivity() {
                     liveTranscript = trimmed
                     deviceControl.triggerHapticFeedback("command_confirm")
 
+                    // Safe multi-step local automation. Sensitive actions (calls, messages, SOS, lock)
+                    // are intentionally excluded and must be issued as individual commands.
+                    val sequence = trimmed.split(
+                        Regex("""(?i)\\s+(?:and\\s+then|then|aur\\s+phir|phir|aur|और\\s+फिर|फिर|और)\\s+""")
+                    ).map { it.trim() }.filter { it.isNotBlank() }
+                    val safeSequenceIntents = setOf(
+                        CommandIntent.OPEN_APP,
+                        CommandIntent.PLAY_MUSIC,
+                        CommandIntent.TOGGLE_TORCH,
+                        CommandIntent.CHECK_BATTERY,
+                        CommandIntent.ADJUST_VOLUME,
+                        CommandIntent.SYSTEM_DIAGNOSTICS
+                    )
+                    if (sequence.size in 2..3 && sequence.all { commandRouter.route(it).intent in safeSequenceIntents }) {
+                        assistantState = AssistantState.THINKING
+                        val sequenceReplies = mutableListOf<String>()
+                        fun executeNextSequenceStep(index: Int) {
+                            if (index >= sequence.size) {
+                                val reply = sequenceReplies.joinToString("\\n")
+                                assistantResponse = reply
+                                assistantState = AssistantState.SPEAKING
+                                deviceControl.triggerHapticFeedback("speech_start")
+                                chatMessages.add(ChatMessage(sender = "myra", text = reply, category = "Smart Automation"))
+                                ChatConversationManager.saveHistory(this@MainActivity, chatMessages)
+                                if (prefs.isVoiceResponseInChatEnabled) {
+                                    isTtsSpeaking = true
+                                    systemEngine?.speak(ChatConversationManager.sanitizeForSpeech(reply))
+                                } else {
+                                    assistantState = AssistantState.IDLE
+                                }
+                                return
+                            }
+                            handleCommand(sequence[index]) { stepReply ->
+                                sequenceReplies.add(stepReply)
+                                executeNextSequenceStep(index + 1)
+                            }
+                        }
+                        executeNextSequenceStep(0)
+                        return
+                    }
+
                     // 1. Direct Device Tool Execution (Torch, Call, WhatsApp, Battery, Volume, Apps)
                     val parsed = commandRouter.route(trimmed)
                     if (parsed.intent != CommandIntent.CONVERSATIONAL_CHAT && parsed.intent != CommandIntent.UNKNOWN_LLM_FALLBACK) {
