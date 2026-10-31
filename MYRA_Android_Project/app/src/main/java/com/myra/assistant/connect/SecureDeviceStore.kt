@@ -3,6 +3,9 @@ package com.myra.assistant.connect
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
+import android.util.Log
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.util.UUID
@@ -13,8 +16,37 @@ import java.util.UUID
  */
 class SecureDeviceStore(context: Context) {
 
-    private val prefs: SharedPreferences = context.getSharedPreferences("myra_connect_secure", Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs: SharedPreferences = appContext.getSharedPreferences("myra_connect_secure", Context.MODE_PRIVATE)
     private val gson = Gson()
+    private val encryptedPrefs: SharedPreferences? by lazy {
+        try {
+            val masterKey = MasterKey.Builder(appContext)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                appContext,
+                "myra_connect_credentials",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (error: Exception) {
+            Log.e("MYRA_ConnectSecurity", "Encrypted pairing storage unavailable; paired credentials are disabled.", error)
+            null
+        }
+    }
+
+    init {
+        val legacy = prefs.getString("paired_devices_list", null)
+        if (!legacy.isNullOrBlank()) {
+            val migrated = encryptedPrefs?.edit()?.putString("paired_devices_list", legacy)?.commit() == true
+            if (migrated) prefs.edit().remove("paired_devices_list").apply()
+        }
+    }
+
+    val isCredentialStorageAvailable: Boolean
+        get() = encryptedPrefs != null
 
     // Unique Persistent ID for this phone
     val thisDeviceId: String
@@ -44,7 +76,7 @@ class SecureDeviceStore(context: Context) {
     // --- Paired Devices Management ---
 
     fun getPairedDevices(): List<PairedDevice> {
-        val json = prefs.getString("paired_devices_list", null) ?: return emptyList()
+        val json = encryptedPrefs?.getString("paired_devices_list", null) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<PairedDevice>>() {}.type
             gson.fromJson<List<PairedDevice>>(json, type) ?: emptyList()
@@ -95,7 +127,7 @@ class SecureDeviceStore(context: Context) {
 
     private fun saveDevicesList(list: List<PairedDevice>) {
         val json = gson.toJson(list)
-        prefs.edit().putString("paired_devices_list", json).apply()
+        encryptedPrefs?.edit()?.putString("paired_devices_list", json)?.apply()
     }
 
     // --- Recipient Device Permissions ---
