@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import java.security.SecureRandom
+import java.security.MessageDigest
 import java.util.UUID
 
 /**
@@ -66,11 +67,32 @@ class DevicePairingManager(
             )
         }
 
-        if (request.pairingCode != currentCode) {
-            Log.w(tag, "Pairing code mismatch.")
+        val codeMatches = MessageDigest.isEqual(
+            currentCode.toByteArray(Charsets.UTF_8),
+            request.pairingCode.toByteArray(Charsets.UTF_8)
+        )
+        val secretMatches = MessageDigest.isEqual(
+            currentSecret.toByteArray(Charsets.UTF_8),
+            request.sharedSecret.toByteArray(Charsets.UTF_8)
+        )
+        if (!codeMatches || !secretMatches) {
+            Log.w(tag, "Pairing proof validation failed.")
             return PairingResponse(
                 success = false,
-                errorMessage = "Invalid 6-digit pairing code."
+                errorMessage = "Pairing code or secure QR proof is invalid."
+            )
+        }
+        if (request.deviceId.isBlank() || request.deviceName.isBlank() ||
+            request.ipAddress.isBlank() || request.port !in 1..65535) {
+            return PairingResponse(
+                success = false,
+                errorMessage = "Device pairing details are incomplete or invalid."
+            )
+        }
+        if (!secureStore.isCredentialStorageAvailable) {
+            return PairingResponse(
+                success = false,
+                errorMessage = "इस फोन में सुरक्षित Pairing Storage उपलब्ध नहीं है। MYRA Connect pairing नहीं की गई।"
             )
         }
 
@@ -88,7 +110,12 @@ class DevicePairingManager(
             connectionType = ConnectionType.WIFI_LOCAL,
             lastConnectedTime = System.currentTimeMillis()
         )
-        secureStore.savePairedDevice(newDevice)
+        if (!secureStore.savePairedDevice(newDevice)) {
+            return PairingResponse(
+                success = false,
+                errorMessage = "Paired device credentials सुरक्षित रूप से सेव नहीं हो सके।"
+            )
+        }
 
         // Clear one-time pairing code
         activePairingCode = null
