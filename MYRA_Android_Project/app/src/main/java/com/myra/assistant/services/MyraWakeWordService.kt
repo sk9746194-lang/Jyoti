@@ -117,14 +117,14 @@ class MyraWakeWordService : Service() {
             try {
                 if (SpeechRecognizer.isRecognitionAvailable(this)) {
                     speechRecognizer?.destroy()
-                    speechRecognizer = if (
+                    speechRecognizer = (if (
                         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                         SpeechRecognizer.isOnDeviceRecognitionAvailable(this)
                     ) {
                         SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
                     } else {
                         SpeechRecognizer.createSpeechRecognizer(this)
-                    }.apply {
+                    }).apply {
                         setRecognitionListener(createListener())
                     }
                     startWakeWordListening()
