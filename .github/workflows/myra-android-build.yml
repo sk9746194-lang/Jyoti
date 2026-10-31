@@ -7,6 +7,7 @@ on:
       - myra-android-ci
     paths:
       - "MYRA_ANDROID_AUDITED_FINAL.zip"
+      - "MYRA_Android_Project/**"
       - ".github/workflows/myra-android-build.yml"
 
 permissions:
@@ -28,14 +29,18 @@ jobs:
 
       - name: Extract MYRA Android project
         run: |
-          mkdir -p .myra-ci
-          unzip -q MYRA_ANDROID_AUDITED_FINAL.zip -d .myra-ci
-          test -f .myra-ci/MYRA_Android_Project/settings.gradle.kts
-          test -f .myra-ci/MYRA_Android_Project/gradlew
-          test -f .myra-ci/MYRA_Android_Project/app/build.gradle.kts
-          rm -rf MYRA_Android_Project
-          cp -a .myra-ci/MYRA_Android_Project ./MYRA_Android_Project
-          echo "Extracted project files:"
+          if [ ! -f MYRA_Android_Project/settings.gradle.kts ]; then
+            mkdir -p .myra-ci
+            unzip -q MYRA_ANDROID_AUDITED_FINAL.zip -d .myra-ci
+            test -f .myra-ci/MYRA_Android_Project/settings.gradle.kts
+            test -f .myra-ci/MYRA_Android_Project/gradlew
+            test -f .myra-ci/MYRA_Android_Project/app/build.gradle.kts
+            cp -a .myra-ci/MYRA_Android_Project ./MYRA_Android_Project
+            echo "Initial extraction completed."
+          else
+            echo "Using committed MYRA_Android_Project; preserving source fixes."
+          fi
+          echo "Project files:"
           find MYRA_Android_Project -type f | sort
 
       - name: Commit extracted project into GitHub branch
