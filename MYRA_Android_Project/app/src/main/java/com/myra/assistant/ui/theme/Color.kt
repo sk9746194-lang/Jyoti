@@ -10,6 +10,7 @@ val SurfaceDark = Color(0xFF0E1422)
 val PrimaryBlue = Color(0xFF2563EB)
 val LightBlue = Color(0xFF3B82F6)
 val CyanNeon = Color(0xFF00E5FF)
+val AccentCyan = CyanNeon
 val AccentIndigo = Color(0xFF6366F1)
 val AccentEmerald = Color(0xFF10B981)
 val EmeraldGlow = Color(0xFF10B981)
