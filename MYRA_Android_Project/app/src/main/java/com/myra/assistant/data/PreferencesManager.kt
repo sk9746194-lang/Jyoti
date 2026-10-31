@@ -32,12 +32,14 @@ class PreferencesManager(context: Context) {
         val legacyKey = prefs.getString("user_gemini_api_key", null)
         if (!legacyKey.isNullOrBlank()) {
             val secureStore = encryptedSecrets
-            if (secureStore != null) {
-                val migrated = runCatching {
-                    secureStore.edit().putString("user_gemini_api_key", legacyKey).commit()
-                }.getOrDefault(false)
-                if (migrated) prefs.edit().remove("user_gemini_api_key").apply()
-            }
+            val migrated = secureStore != null && runCatching {
+                secureStore.edit().putString("user_gemini_api_key", legacyKey).commit()
+            }.getOrDefault(false)
+            // Never keep an API key in plaintext if encrypted storage is unavailable.
+            prefs.edit()
+                .remove("user_gemini_api_key")
+                .putString("gemini_api_status", if (migrated) "Configured" else "Secure storage unavailable — re-enter API key")
+                .apply()
         }
     }
 
@@ -227,23 +229,35 @@ class PreferencesManager(context: Context) {
 
     // --- Gemini API Key & Model Configuration ---
 
+    val isSecureKeyStorageAvailable: Boolean
+        get() = encryptedSecrets != null
+
     var geminiApiKey: String
-        get() {
-            val secureValue = runCatching { encryptedSecrets?.getString("user_gemini_api_key", null) }
-                .onFailure { android.util.Log.e("MYRA_Security", "Unable to read encrypted Gemini key.", it) }
-                .getOrNull()
-            return secureValue ?: (prefs.getString("user_gemini_api_key", "") ?: "")
-        }
+        get() = runCatching { encryptedSecrets?.getString("user_gemini_api_key", "") ?: "" }
+            .onFailure { android.util.Log.e("MYRA_Security", "Unable to read encrypted Gemini key.", it) }
+            .getOrDefault("")
+
         set(value) {
             val cleanValue = value.trim()
             val secureStore = encryptedSecrets
             val savedSecurely = secureStore != null && runCatching {
-                secureStore.edit().putString("user_gemini_api_key", cleanValue).commit()
+                if (cleanValue.isBlank()) secureStore.edit().remove("user_gemini_api_key").commit()
+                else secureStore.edit().putString("user_gemini_api_key", cleanValue).commit()
             }.getOrDefault(false)
-            if (savedSecurely) {
-                prefs.edit().remove("user_gemini_api_key").apply()
-            } else {
-                prefs.edit().putString("user_gemini_api_key", cleanValue).apply()
+            // Fail closed: do not write API credentials to ordinary SharedPreferences.
+            prefs.edit()
+                .remove("user_gemini_api_key")
+                .putString(
+                    "gemini_api_status",
+                    when {
+                        cleanValue.isBlank() -> "Not Configured"
+                        savedSecurely -> "Configured"
+                        else -> "Secure storage unavailable — API key not saved"
+                    }
+                )
+                .apply()
+            if (!savedSecurely && cleanValue.isNotBlank()) {
+                android.util.Log.e("MYRA_Security", "Gemini API key was not saved because encrypted storage is unavailable.")
             }
         }
 
