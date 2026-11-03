@@ -1,5 +1,10 @@
 package com.myra.assistant.services
 
+import com.myra.assistant.MainActivity
+import com.myra.assistant.MyraApplication
+import com.myra.assistant.data.PreferencesManager
+import java.util.Locale
+
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
@@ -168,7 +173,7 @@ class MyraWakeWordService : Service() {
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
-                putExtra(RecognizerIntent.EXTRA_ADDITIONAL_LANGUAGES, arrayOf("en-IN", "en-US"))
+                // Language alternatives are managed by the installed recognition provider.
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
@@ -291,7 +296,7 @@ class MyraWakeWordService : Service() {
         for (trig in triggers) {
             val idx = lower.indexOf(trig)
             if (idx != -1) {
-                followUpCommand = rawSpeech.substring(idx + trig.length).trim(" ,.!?".toCharArray())
+                followUpCommand = rawSpeech.substring(idx + trig.length).trim(*" ,.!?".toCharArray())
                 break
             }
         }
