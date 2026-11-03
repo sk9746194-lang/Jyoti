@@ -59,20 +59,24 @@ jobs:
         with:
           packages: platform-tools
 
-      - name: Build debug APK when Gradle wrapper exists
+      - name: Build main MYRA app and Companion app
         shell: bash
         run: |
           set -euo pipefail
-          WRAPPER="$(find MYRA_EXTRACTED -type f -name gradlew -print -quit || true)"
-          if [ -z "$WRAPPER" ]; then
-            echo "No Gradle wrapper found in the extracted ZIP; extraction completed, APK build skipped."
-            exit 0
-          fi
-          PROJECT_DIR="$(dirname "$WRAPPER")"
-          echo "Building Android project at: $PROJECT_DIR"
-          cd "$PROJECT_DIR"
+
+          echo "=== Build main MYRA Android app ==="
+          cd MYRA_EXTRACTED
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
+          echo "=== Main MYRA APK ==="
+          find app/build/outputs/apk -type f -name '*.apk' -print
+
+          echo "=== Build MYRA Companion Android app ==="
+          cd MYRA_Companion_Project
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          echo "=== Companion APK ==="
+          find app/build/outputs/apk -type f -name '*.apk' -print
 
       - name: Upload extracted project and build reports
         if: always()
