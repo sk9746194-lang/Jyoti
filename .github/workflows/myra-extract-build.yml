@@ -28,8 +28,13 @@ jobs:
           ls -lh MYRA_SMART_GEMINI_API_COMPLETE.zip
           echo "=== ZIP contents ==="
           unzip -Z1 MYRA_SMART_GEMINI_API_COMPLETE.zip | tee ZIP_CONTENTS.txt
-          mkdir -p MYRA_EXTRACTED
-          unzip -oq MYRA_SMART_GEMINI_API_COMPLETE.zip -d MYRA_EXTRACTED
+          if [ ! -f MYRA_EXTRACTED/gradlew ]; then
+            echo "No committed extracted project found; extracting the original ZIP once."
+            mkdir -p MYRA_EXTRACTED
+            unzip -oq MYRA_SMART_GEMINI_API_COMPLETE.zip -d MYRA_EXTRACTED
+          else
+            echo "Using committed MYRA_EXTRACTED source; preserving tracked fixes instead of overwriting from the original ZIP."
+          fi
           echo "=== Extracted files ==="
           find MYRA_EXTRACTED -maxdepth 5 -type f | sort | tee EXTRACTED_FILES.txt
           echo "=== Project manifests ==="
