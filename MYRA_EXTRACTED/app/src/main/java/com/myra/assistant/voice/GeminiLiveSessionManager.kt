@@ -83,7 +83,7 @@ class GeminiLiveSessionManager(
                     put("speechConfig", JSONObject().apply {
                         put("voiceConfig", JSONObject().apply {
                             put("prebuiltVoiceConfig", JSONObject().apply {
-                                put("voiceName", "Kore")
+                                put("voiceName", "Aoede")
                             })
                         })
                     })

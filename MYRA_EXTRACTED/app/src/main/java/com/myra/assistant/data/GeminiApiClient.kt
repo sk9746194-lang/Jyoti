@@ -608,12 +608,15 @@ object GeminiApiClient {
             put("name", "toggle_torch")
             put("description", "Turn the device flashlight / torch on or off.")
             put("parameters", JSONObject().apply {
-                put("state", JSONObject().apply {
-                    put("type", "BOOLEAN")
-                    put("description", "True to turn on flashlight, False to turn off.")
+                put("type", "OBJECT")
+                put("properties", JSONObject().apply {
+                    put("state", JSONObject().apply {
+                        put("type", "BOOLEAN")
+                        put("description", "True to turn on flashlight, False to turn off.")
+                    })
                 })
+                put("required", JSONArray().apply { put("state") })
             })
-            put("required", JSONArray().apply { put("state") })
         })
 
         // 8. adjust_volume
