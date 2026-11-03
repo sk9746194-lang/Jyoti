@@ -15,6 +15,9 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.Psychology
 import androidx.lifecycle.lifecycleScope
 import com.myra.assistant.data.AssistantState
 import com.myra.assistant.data.VoiceStatus
@@ -40,6 +43,7 @@ import com.myra.assistant.data.GeminiApiClient
 import com.myra.assistant.ui.screens.ChatScreen
 import com.myra.assistant.ui.screens.HomeScreen
 import com.myra.assistant.ui.screens.MainVoiceScreen
+import com.myra.assistant.ui.screens.MyraConnectScreen
 import com.myra.assistant.ui.screens.SettingsScreen
 import com.myra.assistant.ui.screens.ToolsScreen
 import com.myra.assistant.ui.theme.CardDark
