@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   extract-and-build:
@@ -33,6 +33,20 @@ jobs:
           find MYRA_EXTRACTED -maxdepth 5 -type f | sort | tee EXTRACTED_FILES.txt
           echo "=== Project manifests ==="
           find MYRA_EXTRACTED -maxdepth 6 \( -name settings.gradle -o -name settings.gradle.kts -o -name build.gradle -o -name build.gradle.kts -o -name gradlew -o -name pubspec.yaml -o -name package.json \) -type f -print
+
+      - name: Commit extracted MYRA source into repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MYRA_EXTRACTED ZIP_CONTENTS.txt EXTRACTED_FILES.txt
+          if git diff --cached --quiet; then
+            echo "Extracted source is already committed; no repository update needed."
+          else
+            git commit -m "Extract MYRA Android project from ZIP"
+            git push origin HEAD:main
+          fi
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
