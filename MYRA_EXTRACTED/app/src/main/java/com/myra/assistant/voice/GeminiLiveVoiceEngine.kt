@@ -128,7 +128,7 @@ class GeminiLiveVoiceEngine(
                     put("speechConfig", JSONObject().apply {
                         put("voiceConfig", JSONObject().apply {
                             put("prebuiltVoiceConfig", JSONObject().apply {
-                                put("voiceName", "Puck")
+                                put("voiceName", "Aoede")
                             })
                         })
                     })
