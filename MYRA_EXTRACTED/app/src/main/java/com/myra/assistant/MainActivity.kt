@@ -829,10 +829,19 @@ class MainActivity : FragmentActivity() {
                     phoneControl.handleCallCommand(target)
                 }
                 "send_whatsapp" -> {
-                    val target = args["target"]?.toString() ?: ""
-                    val msg = args["message"]?.toString() ?: ""
-                    whatsAppAutomation.handleWhatsAppCommand(target, msg, autoSend = false) { }
-                    CommandResult.success("WhatsApp पर $target के लिए संदेश तैयार कर दिया गया है।", target = target, detail = msg)
+                    val target = args["target"]?.toString().orEmpty().trim()
+                    val msg = args["message"]?.toString().orEmpty().trim()
+                    if (target.isBlank()) {
+                        CommandResult.failed("WhatsApp संपर्क का नाम या नंबर नहीं मिला।", target = "whatsapp")
+                    } else {
+                        // Return the real launch/compose result; do not report success if WhatsApp
+                        // is missing or the chat could not be opened.
+                        whatsAppAutomation.handleWhatsAppCommand(
+                            target = target,
+                            messageText = msg,
+                            autoSend = false
+                        )
+                    }
                 }
                 "send_sms" -> {
                     val target = args["target"]?.toString() ?: ""
