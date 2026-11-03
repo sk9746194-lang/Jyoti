@@ -23,7 +23,7 @@ enum class PersonalityMode {
 
 data class VoiceStatus(
     val activeMode: VoiceEngineMode = VoiceEngineMode.GEMINI_LIVE,
-    val voiceName: String = "Kore (Female Indian Voice)",
+    val voiceName: String = "Aoede (Google Gemini Live)",
     val sampleRateIn: Int = 16000,
     val sampleRateOut: Int = 24000,
     val fallbackActive: Boolean = false,
