@@ -50,6 +50,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { PreferencesManager(context) }
+    val whatsappAutomation = remember { WhatsAppAutomation(context) }
     val orbManager = remember { OrbCustomizationManager.getInstance(context) }
     val orbSettings by orbManager.settingsState
 
@@ -1159,8 +1160,8 @@ fun SettingsScreen(
 
         // 💬 WhatsApp Automation & Accessibility Service Card
         item {
-            var isAccessibilityActive by remember { mutableStateOf(WhatsAppAutomation.isAccessibilityActive(context)) }
-            val isWhatsAppInstalled = remember { WhatsAppAutomation.isInstalled(context) }
+            var isAccessibilityActive by remember { mutableStateOf(whatsappAutomation.isAccessibilityActive()) }
+            val isWhatsAppInstalled = remember { whatsappAutomation.isInstalled() }
             var isRequireConfirm by remember { mutableStateOf(prefs.isWhatsAppConfirmBeforeSend) }
 
             Surface(
@@ -1290,7 +1291,7 @@ fun SettingsScreen(
                             ) {
                                 Button(
                                     onClick = {
-                                        WhatsAppAutomation.openAccessibilitySettings(context)
+                                        whatsappAutomation.openAccessibilitySettings()
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = if (isAccessibilityActive) BorderSlate else PrimaryBlue),
                                     shape = RoundedCornerShape(10.dp),
