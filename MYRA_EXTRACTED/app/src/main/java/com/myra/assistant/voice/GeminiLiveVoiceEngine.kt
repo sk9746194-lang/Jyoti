@@ -53,10 +53,14 @@ class GeminiLiveVoiceEngine(
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.i(tag, "Gemini Live WebSocket opened (Google Bidi: $isGoogleBidiEndpoint)")
-                onStatusChanged(true, null)
 
                 if (isGoogleBidiEndpoint) {
+                    // A socket connection is not a ready Live session. Wait for Google's
+                    // setupComplete message before enabling native audio capture/playback.
+                    onStatusChanged(false, "Waiting for Google Live setup confirmation")
                     sendGoogleHandshake(webSocket, targetLiveModel)
+                } else {
+                    onStatusChanged(true, null)
                 }
             }
 
