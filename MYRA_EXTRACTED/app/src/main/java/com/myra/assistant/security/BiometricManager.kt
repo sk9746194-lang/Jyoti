@@ -54,7 +54,7 @@ class BiometricManager(context: Context) {
     private val appContext = context.applicationContext
     private val tag = "MYRA_BiometricManager"
     private val prefs = appContext.getSharedPreferences("myra_biometric_security_logs", Context.MODE_PRIVATE)
-    private val gson = com.google.code.gson.Gson()
+    private val gson = com.google.gson.Gson()
 
     // Active session window (default 2 minutes)
     var sessionTimeoutMinutes: Int = 2
@@ -188,7 +188,7 @@ class BiometricManager(context: Context) {
         try {
             val json = prefs.getString(KEY_LOGS_JSON, null)
             if (!json.isNullOrBlank()) {
-                val type = object : com.google.code.gson.reflect.TypeToken<List<SecurityLogEntry>>() {}.type
+                val type = object : com.google.gson.reflect.TypeToken<List<SecurityLogEntry>>() {}.type
                 val loaded: List<SecurityLogEntry> = gson.fromJson(json, type)
                 synchronized(securityLogs) {
                     securityLogs.clear()
