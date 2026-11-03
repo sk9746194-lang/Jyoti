@@ -163,7 +163,7 @@ fun MainVoiceScreen(
                     border = BorderStroke(1.dp, if (voiceStatus.fallbackActive) PrimaryBlue.copy(alpha = 0.6f) else AccentEmerald)
                 ) {
                     Text(
-                        text = if (voiceStatus.fallbackActive) "🎙️ Android Native Speech (Local Engine)" else "⚡ Gemini Live 24kHz • Real-time Stream",
+                        text = if (voiceStatus.fallbackActive) "Android TTS fallback • ${voiceStatus.fallbackReason ?: "Gemini Live unavailable"}" else "Gemini Live • Aoede • Native Audio",
                         color = if (voiceStatus.fallbackActive) LightBlue else Color(0xFFA7F3D0),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
