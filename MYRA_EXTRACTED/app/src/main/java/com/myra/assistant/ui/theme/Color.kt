@@ -11,6 +11,8 @@ val PrimaryBlue = Color(0xFF2563EB)
 val LightBlue = Color(0xFF3B82F6)
 val CyanNeon = Color(0xFF00E5FF)
 val AccentIndigo = Color(0xFF6366F1)
+// Purple accent used by ToolsScreen automation cards.
+val PurpleNeon = AccentIndigo
 val AccentEmerald = Color(0xFF10B981)
 val EmeraldGlow = Color(0xFF10B981)
 val AccentRose = Color(0xFFF43F5E)
