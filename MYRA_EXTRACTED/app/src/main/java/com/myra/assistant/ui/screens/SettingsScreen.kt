@@ -1304,7 +1304,7 @@ fun SettingsScreen(
 
                                 OutlinedButton(
                                     onClick = {
-                                        isAccessibilityActive = WhatsAppAutomation.isAccessibilityActive(context)
+                                        isAccessibilityActive = whatsappAutomation.isAccessibilityActive()
                                         Toast.makeText(
                                             context,
                                             if (isAccessibilityActive) "Service is active!" else "Service not enabled yet",
