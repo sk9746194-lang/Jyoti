@@ -26,8 +26,8 @@ data class VoiceStatus(
     val voiceName: String = "Aoede (Google Gemini Live)",
     val sampleRateIn: Int = 16000,
     val sampleRateOut: Int = 24000,
-    val fallbackActive: Boolean = false,
-    val fallbackReason: String? = null
+    val fallbackActive: Boolean = true,
+    val fallbackReason: String? = "Connecting to Google Gemini Live"
 )
 
 data class AssistantResponse(
