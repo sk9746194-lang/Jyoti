@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/myra-extract-build.yml"
       - "MYRA_SMART_GEMINI_API_COMPLETE.zip"
+      - "MYRA_EXTRACTED/**"
   workflow_dispatch:
 
 permissions:
