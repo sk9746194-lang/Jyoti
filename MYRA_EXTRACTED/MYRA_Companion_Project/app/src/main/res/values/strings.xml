@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MYRA Companion</string>
+    <string name="accessibility_service_desc">Enables MYRA Primary Phone to remotely execute approved touch and swipe navigation on this device across the local hotspot.</string>
+</resources>
