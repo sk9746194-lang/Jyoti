@@ -147,7 +147,15 @@ class MainActivity : FragmentActivity() {
                 var showVisionScreen by remember { mutableStateOf(false) }
                 var showAutomationScreen by remember { mutableStateOf(false) }
                 var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
-                var voiceStatus by remember { mutableStateOf(VoiceStatus()) }
+                var voiceStatus by remember {
+                    mutableStateOf(
+                        VoiceStatus(
+                            voiceName = "Aoede (Google Gemini Live)",
+                            fallbackActive = true,
+                            fallbackReason = "Connecting to Google Gemini Live"
+                        )
+                    )
+                }
                 var audioLevel by remember { mutableFloatStateOf(0f) }
                 var liveTranscript by remember { mutableStateOf("") }
                 var assistantResponse by remember { mutableStateOf("") }
