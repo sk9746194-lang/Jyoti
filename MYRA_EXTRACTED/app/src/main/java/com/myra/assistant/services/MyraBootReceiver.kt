@@ -22,8 +22,13 @@ class MyraBootReceiver : BroadcastReceiver() {
         ) {
             val prefs = PreferencesManager(context)
             if (prefs.isHandsFreeWakeWordEnabled) {
-                Log.i("MYRA_BootReceiver", "Hands-free enabled; starting MyraWakeWordService after boot/update")
-                MyraWakeWordService.start(context)
+                // Android 14+ restricts starting a microphone foreground service from
+                // BOOT_COMPLETED. The user must open MYRA once after reboot; MainActivity
+                // starts the listener after RECORD_AUDIO permission is confirmed.
+                Log.i(
+                    "MYRA_BootReceiver",
+                    "Hands-free is enabled; waiting for the user to open MYRA before starting microphone capture."
+                )
             }
         }
     }
