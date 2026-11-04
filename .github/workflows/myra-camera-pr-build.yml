@@ -1,0 +1,55 @@
+name: MYRA Chat Live Camera PR Build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "MYRA_EXTRACTED/**"
+      - ".github/workflows/myra-camera-pr-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Build main MYRA app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd MYRA_EXTRACTED
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Build MYRA Companion app
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd MYRA_EXTRACTED/MYRA_Companion_Project
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload both debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: MYRA-Chat-Live-Camera-APKs
+          path: |
+            MYRA_EXTRACTED/app/build/outputs/apk/**/*.apk
+            MYRA_EXTRACTED/MYRA_Companion_Project/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
