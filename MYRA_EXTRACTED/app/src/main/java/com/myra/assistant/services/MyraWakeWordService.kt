@@ -145,6 +145,11 @@ class MyraWakeWordService : Service() {
     private fun initAndStartListening() {
         handler.post {
             try {
+                if (!hasRecordAudioPermission()) {
+                    Log.w(TAG, "RECORD_AUDIO permission is not granted; stopping wake-word service.")
+                    stopSelf()
+                    return@post
+                }
                 if (SpeechRecognizer.isRecognitionAvailable(this)) {
                     speechRecognizer?.destroy()
                     speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
@@ -163,6 +168,11 @@ class MyraWakeWordService : Service() {
 
     private fun startWakeWordListening() {
         if (isDestroyed) return
+        if (!hasRecordAudioPermission()) {
+            Log.w(TAG, "Microphone permission was revoked; stopping wake-word service.")
+            stopSelf()
+            return
+        }
         val prefs = PreferencesManager(this)
         if (!prefs.isHandsFreeWakeWordEnabled) {
             Log.i(TAG, "Hands-free wake word is disabled in preferences; pausing listener")
@@ -187,6 +197,10 @@ class MyraWakeWordService : Service() {
             scheduleRestart(1000)
         }
     }
+
+    private fun hasRecordAudioPermission(): Boolean =
+        android.content.pm.PackageManager.PERMISSION_GRANTED ==
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
 
     private fun scheduleRestart(delayMs: Long) {
         handler.removeCallbacks(restartRunnable)
