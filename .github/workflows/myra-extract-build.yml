@@ -90,6 +90,16 @@ jobs:
           echo "=== Companion APK ==="
           find app/build/outputs/apk -type f -name '*.apk' -print
 
+      - name: Upload installable MYRA APK files
+        uses: actions/upload-artifact@v4
+        with:
+          name: MYRA-DEBUG-APKS
+          path: |
+            MYRA_EXTRACTED/app/build/outputs/apk/**/*.apk
+            MYRA_EXTRACTED/MYRA_Companion_Project/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload extracted project and build reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,6 +109,5 @@ jobs:
             MYRA_EXTRACTED/
             ZIP_CONTENTS.txt
             EXTRACTED_FILES.txt
-            **/build/outputs/apk/**/*.apk
           if-no-files-found: warn
           retention-days: 14
