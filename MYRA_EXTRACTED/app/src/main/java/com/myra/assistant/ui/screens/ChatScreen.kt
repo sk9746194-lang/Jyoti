@@ -15,7 +15,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -830,6 +830,32 @@ fun ChatScreen(
         }
     }
 
+    // Confirmation Dialog for Clearing Chat History
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text("Clear Chat History?", color = Color.White, fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete all messages in this conversation? This action cannot be undone.", color = TextSecondary, fontSize = 13.sp) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearDialog = false
+                        onClearChatHistory()
+                    }
+                ) {
+                    Text("Clear All", color = Color(0xFFF43F5E), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel", color = LightBlue)
+                }
+            },
+            containerColor = Color(0xFF0F1A30),
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+}
 /**
  * CameraX preview with user-visible preview and one JPEG snapshot per second.
  * Camera use is scoped to this composable; leaving Chat unbinds the camera.
@@ -926,29 +952,4 @@ private fun CameraLivePreview(
     }
 }
 
-    // Confirmation Dialog for Clearing Chat History
-    if (showClearDialog) {
-        AlertDialog(
-            onDismissRequest = { showClearDialog = false },
-            title = { Text("Clear Chat History?", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to delete all messages in this conversation? This action cannot be undone.", color = TextSecondary, fontSize = 13.sp) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showClearDialog = false
-                        onClearChatHistory()
-                    }
-                ) {
-                    Text("Clear All", color = Color(0xFFF43F5E), fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearDialog = false }) {
-                    Text("Cancel", color = LightBlue)
-                }
-            },
-            containerColor = Color(0xFF0F1A30),
-            shape = RoundedCornerShape(16.dp)
-        )
-    }
-}
+
