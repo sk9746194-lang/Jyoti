@@ -32,9 +32,10 @@ object GeminiApiClient {
     const val LIVE_MODEL = "gemini-3.8-live"
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(12, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(12, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
+        .callTimeout(60, TimeUnit.SECONDS)
         .build()
 
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
@@ -137,7 +138,7 @@ object GeminiApiClient {
             return@withContext Pair(false, "DNS Resolution Failed: Unable to resolve 'generativelanguage.googleapis.com'. Please check device internet connection or DNS.")
         } catch (e: java.net.SocketTimeoutException) {
             Log.e(TAG, "Socket timeout: ${e.message}")
-            return@withContext Pair(false, "Connection Timeout: Google Gemini servers did not respond within 15 seconds. Please check network latency.")
+            return@withContext Pair(false, "Gemini chat/API test timed out (up to 60 seconds). This checks the selected Flash chat model, not Gemini Live Voice. Check internet/DNS or retry on a stable network.")
         } catch (e: javax.net.ssl.SSLException) {
             Log.e(TAG, "SSL handshake error: ${e.message}")
             return@withContext Pair(false, "SSL/TLS Error: Secure handshake with Google servers failed (${e.localizedMessage ?: "TLS certificate issue"}).")
