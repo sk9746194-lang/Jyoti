@@ -7,6 +7,11 @@ on:
       - ".github/workflows/myra-extract-build.yml"
       - "MYRA_SMART_GEMINI_API_COMPLETE.zip"
       - "MYRA_EXTRACTED/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "MYRA_EXTRACTED/**"
+      - ".github/workflows/myra-extract-build.yml"
   workflow_dispatch:
 
 permissions:
@@ -41,6 +46,7 @@ jobs:
           find MYRA_EXTRACTED -maxdepth 6 \( -name settings.gradle -o -name settings.gradle.kts -o -name build.gradle -o -name build.gradle.kts -o -name gradlew -o -name pubspec.yaml -o -name package.json \) -type f -print
 
       - name: Commit extracted MYRA source into repository
+        if: github.event_name == 'push'
         shell: bash
         run: |
           set -euo pipefail
