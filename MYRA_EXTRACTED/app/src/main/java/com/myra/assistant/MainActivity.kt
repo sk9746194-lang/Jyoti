@@ -170,8 +170,17 @@ class MainActivity : FragmentActivity() {
                         // Use the same Google Gemini Live Aoede Native Audio session as the main voice assistant.
                         // Android TTS is used only when Live is not ready.
                         systemEngine?.stopSpeaking()
-                        isTtsSpeaking = true
-                        liveEngine?.sendTextMessage("Read the following MYRA response aloud verbatim. Do not add, remove, or explain anything: $cleanText")
+                        val sentToLive = liveEngine?.sendTextMessage(
+                            "Read the following MYRA response aloud verbatim. Do not add, remove, or explain anything: $cleanText"
+                        ) == true
+                        if (sentToLive) {
+                            isTtsSpeaking = true
+                        } else {
+                            // The socket may close between the Compose readiness check and send().
+                            // Do not silently drop the spoken reply in that race.
+                            isTtsSpeaking = true
+                            systemEngine?.speak(cleanText)
+                        }
                     } else {
                         isTtsSpeaking = true
                         systemEngine?.speak(cleanText)
