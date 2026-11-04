@@ -238,6 +238,29 @@ class GeminiLiveVoiceEngine(
         onAudioLevel(normalized)
     }
 
+    /**
+     * Sends one JPEG camera frame to the active Google Gemini Live session.
+     * The caller samples frames at approximately 1 FPS; no frame is retained locally.
+     */
+    fun sendVideoFrame(jpegBytes: ByteArray): Boolean {
+        if (!isSessionReady || !isGoogleBidiEndpoint || jpegBytes.isEmpty()) return false
+        return try {
+            val base64 = Base64.encodeToString(jpegBytes, Base64.NO_WRAP)
+            val payload = JSONObject().apply {
+                put("realtimeInput", JSONObject().apply {
+                    put("video", JSONObject().apply {
+                        put("mimeType", "image/jpeg")
+                        put("data", base64)
+                    })
+                })
+            }
+            webSocket?.send(payload.toString()) == true
+        } catch (e: Exception) {
+            Log.w(tag, "Unable to send Gemini Live video frame: ${e.message}")
+            false
+        }
+    }
+
     fun sendAudioChunk(pcmChunk: ByteArray) {
         if (!isSessionReady) return
         val base64 = Base64.encodeToString(pcmChunk, Base64.NO_WRAP)
