@@ -581,6 +581,11 @@ class MainActivity : FragmentActivity() {
                                             assistantState = AssistantState.IDLE
                                         }
                                     },
+                                    liveCameraReady = liveEngine != null && !voiceStatus.fallbackActive,
+                                    onVideoFrame = { jpegFrame ->
+                                        // CameraX samples at ~1 FPS; only the active Gemini Live session receives frames.
+                                        liveEngine?.sendVideoFrame(jpegFrame)
+                                    },
                                     onNavigateBack = { currentTab = 0 }
                                 )
                                 2 -> MainVoiceScreen(
