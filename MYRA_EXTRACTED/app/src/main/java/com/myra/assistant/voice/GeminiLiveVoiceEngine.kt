@@ -252,6 +252,13 @@ class GeminiLiveVoiceEngine(
         }
     }
 
+    /** Stops currently buffered Gemini Live audio without closing the session. */
+    fun stopPlayback() {
+        player.stop()
+        onSpeakingStateChanged(false)
+        onAudioLevel(0f)
+    }
+
     fun disconnect() {
         try {
             webSocket?.close(1000, "User exited")
