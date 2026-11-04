@@ -104,8 +104,9 @@ fun ChatScreen(
         if (granted && liveCameraReady) liveCameraActive = true
     }
 
-    DisposableEffect(Unit) {
-        onDispose { liveCameraActive = false }
+    // A Live disconnect/fallback must stop camera capture immediately.
+    LaunchedEffect(liveCameraReady) {
+        if (!liveCameraReady) liveCameraActive = false
     }
 
     // Pulsing animation for listening/thinking states
@@ -881,21 +882,26 @@ private fun CameraLivePreview(
     }
     var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
 
-    DisposableEffect(lifecycleOwner, previewView) {
+    DisposableEffect(lifecycleOwner, previewView, imageCapture) {
         val providerFuture = ProcessCameraProvider.getInstance(context)
+        var disposed = false
+        var boundProvider: ProcessCameraProvider? = null
+        val preview = Preview.Builder().build().also {
+            it.setSurfaceProvider(previewView.surfaceProvider)
+        }
         val listener = Runnable {
             try {
                 val provider = providerFuture.get()
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
-                provider.unbindAll()
+                // The Future may complete after this composable has left composition.
+                // Never bind the camera after Stop/navigation has disposed this effect.
+                if (disposed) return@Runnable
                 provider.bindToLifecycle(
                     lifecycleOwner,
                     CameraSelector.DEFAULT_BACK_CAMERA,
                     preview,
                     imageCapture
                 )
+                boundProvider = provider
                 cameraProvider = provider
             } catch (error: Exception) {
                 android.util.Log.e("MYRA_LiveCamera", "CameraX binding failed", error)
@@ -903,8 +909,10 @@ private fun CameraLivePreview(
         }
         providerFuture.addListener(listener, ContextCompat.getMainExecutor(context))
         onDispose {
-            cameraProvider?.unbindAll()
-            cameraProvider = null
+            disposed = true
+            // Unbind only this screen's use cases; do not disrupt other camera features.
+            boundProvider?.unbind(preview, imageCapture)
+            if (cameraProvider === boundProvider) cameraProvider = null
         }
     }
 
@@ -930,7 +938,9 @@ private fun CameraLivePreview(
                                 if (buffer != null) {
                                     val bytes = ByteArray(buffer.remaining())
                                     buffer.get(bytes)
-                                    if (bytes.isNotEmpty()) onFrame(bytes)
+                                    // A capture callback can arrive after Stop/navigation cancelled
+                                    // the coroutine. Do not forward that stale frame to Gemini.
+                                    if (continuation.isActive && bytes.isNotEmpty()) onFrame(bytes)
                                 }
                             } catch (error: Exception) {
                                 android.util.Log.w("MYRA_LiveCamera", "Frame conversion failed", error)
