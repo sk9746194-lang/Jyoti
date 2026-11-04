@@ -223,6 +223,12 @@ class PreferencesManager(context: Context) {
 
     // --- AI Chat & Voice Conversation System Preferences ---
 
+    /** Persistent chat personality: FRIENDLY, GF (warm companion), or PROFESSIONAL. */
+    var chatPersonalityMode: String
+        get() = prefs.getString("chat_personality_mode", "FRIENDLY") ?: "FRIENDLY"
+        set(value) = prefs.edit().putString("chat_personality_mode", value).apply()
+
+
     var isVoiceResponseInChatEnabled: Boolean
         get() = prefs.getBoolean("chat_voice_response_enabled", true)
         set(value) = prefs.edit().putBoolean("chat_voice_response_enabled", value).apply()

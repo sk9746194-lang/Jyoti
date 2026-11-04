@@ -608,12 +608,15 @@ object GeminiApiClient {
             put("name", "toggle_torch")
             put("description", "Turn the device flashlight / torch on or off.")
             put("parameters", JSONObject().apply {
-                put("state", JSONObject().apply {
-                    put("type", "BOOLEAN")
-                    put("description", "True to turn on flashlight, False to turn off.")
+                put("type", "OBJECT")
+                put("properties", JSONObject().apply {
+                    put("state", JSONObject().apply {
+                        put("type", "BOOLEAN")
+                        put("description", "True to turn on flashlight, False to turn off.")
+                    })
                 })
+                put("required", JSONArray().apply { put("state") })
             })
-            put("required", JSONArray().apply { put("state") })
         })
 
         // 8. adjust_volume
@@ -741,6 +744,7 @@ object GeminiApiClient {
         userPrompt: String,
         conversationHistory: List<Pair<String, String>> = emptyList(),
         preferredLanguage: String = "auto",
+        personalityMode: String = "FRIENDLY",
         systemInstruction: String = "You are MYRA, a premier AI voice and phone assistant. You can converse naturally in Hindi, Hinglish, or English. When the user requests a phone action (like calling, texting, alarms, torch, volume, app launch, wifi settings), invoke the corresponding tool function immediately. Once the tool result is provided, confirm the outcome clearly and warmly.",
         toolExecutor: suspend (name: String, args: Map<String, Any?>) -> ToolExecutionOutcome
     ): Result<FunctionCallingResponse> = withContext(Dispatchers.IO) {
@@ -757,7 +761,12 @@ object GeminiApiClient {
             "en" -> " Please respond strictly in clear, natural English."
             else -> " Detect the user's input language and respond seamlessly in the same language (Hindi, Hinglish, or English)."
         }
-        val fullInstruction = systemInstruction + languageDirective
+        val personalityDirective = when (personalityMode.uppercase()) {
+            "GF", "ROMANTIC_GF" -> " Use a warm, affectionate, caring companion tone, like a friendly virtual girlfriend, while staying respectful, emotionally healthy, non-possessive, honest, and never claiming to be a real human. Do not encourage isolation or dependency. Keep answers useful and natural; do not force romantic language into technical or serious topics."
+            "PROFESSIONAL" -> " Use a concise, polished, professional tone. Prioritize accuracy, clear structure, and practical next steps."
+            else -> " Use a friendly, natural, supportive assistant tone. Be conversational, thoughtful, and clear."
+        }
+        val fullInstruction = systemInstruction + personalityDirective + languageDirective
 
         var lastError = "Request failed"
         for (m in candidateModels) {

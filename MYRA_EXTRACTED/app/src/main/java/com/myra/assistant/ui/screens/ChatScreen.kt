@@ -57,6 +57,8 @@ fun ChatScreen(
     activeModel: String = "gemini-3.8-flash",
     isVoiceResponseEnabled: Boolean = true,
     isContinuousVoiceEnabled: Boolean = false,
+    personalityMode: String = "FRIENDLY",
+    onPersonalityModeChange: (String) -> Unit = {},
     onSendMessage: (String) -> Unit,
     onStopGeneration: () -> Unit = {},
     onRetryMessage: (ChatMessage) -> Unit = {},
@@ -119,6 +121,19 @@ fun ChatScreen(
                 )
             )
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            listOf("FRIENDLY" to "GPT Mode", "GF" to "GF Mode", "PROFESSIONAL" to "Professional").forEach { (mode, label) ->
+                FilterChip(
+                    selected = personalityMode.equals(mode, ignoreCase = true),
+                    onClick = { onPersonalityModeChange(mode) },
+                    label = { Text(label, fontSize = 11.sp) }
+                )
+            }
+        }
         // -------------------------------------------------------------
         // 1. TOP HEADER (ChatGPT-Style with Controls)
         // -------------------------------------------------------------

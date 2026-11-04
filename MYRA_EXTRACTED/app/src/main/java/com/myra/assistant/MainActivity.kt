@@ -147,7 +147,15 @@ class MainActivity : FragmentActivity() {
                 var showVisionScreen by remember { mutableStateOf(false) }
                 var showAutomationScreen by remember { mutableStateOf(false) }
                 var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
-                var voiceStatus by remember { mutableStateOf(VoiceStatus()) }
+                var voiceStatus by remember {
+                    mutableStateOf(
+                        VoiceStatus(
+                            voiceName = "Aoede (Google Gemini Live)",
+                            fallbackActive = true,
+                            fallbackReason = "Connecting to Google Gemini Live"
+                        )
+                    )
+                }
                 var audioLevel by remember { mutableFloatStateOf(0f) }
                 var liveTranscript by remember { mutableStateOf("") }
                 var assistantResponse by remember { mutableStateOf("") }
@@ -156,7 +164,23 @@ class MainActivity : FragmentActivity() {
                 val chatMessages = remember { mutableStateListOf<ChatMessage>() }
                 var isGeneratingChat by remember { mutableStateOf(false) }
                 var isTtsSpeaking by remember { mutableStateOf(false) }
+                var chatPersonalityMode by remember { mutableStateOf(prefs.chatPersonalityMode) }
                 var activeChatJob by remember { mutableStateOf<Job?>(null) }
+
+                fun speakChatReply(text: String) {
+                    val cleanText = ChatConversationManager.sanitizeForSpeech(text)
+                    val liveReady = liveEngine != null && !voiceStatus.fallbackActive
+                    if (liveReady) {
+                        // Use the same Google Gemini Live Aoede Native Audio session as the main voice assistant.
+                        // Android TTS is used only when Live is not ready.
+                        systemEngine?.stopSpeaking()
+                        isTtsSpeaking = true
+                        liveEngine?.sendTextMessage("Read the following MYRA response aloud verbatim. Do not add, remove, or explain anything: $cleanText")
+                    } else {
+                        isTtsSpeaking = true
+                        systemEngine?.speak(cleanText)
+                    }
+                }
 
                 fun sendChatMessage(cmd: String) {
                     val trimmed = cmd.trim()
@@ -182,7 +206,7 @@ class MainActivity : FragmentActivity() {
                             ChatConversationManager.saveHistory(this@MainActivity, chatMessages)
                             if (prefs.isVoiceResponseInChatEnabled) {
                                 isTtsSpeaking = true
-                                systemEngine?.speak(ChatConversationManager.sanitizeForSpeech(reply))
+                                speakChatReply(reply)
                             } else {
                                 assistantState = AssistantState.IDLE
                             }
@@ -203,7 +227,7 @@ class MainActivity : FragmentActivity() {
                         assistantState = AssistantState.IDLE
                         if (prefs.isVoiceResponseInChatEnabled) {
                             isTtsSpeaking = true
-                            systemEngine?.speak(ChatConversationManager.sanitizeForSpeech(reply))
+                            speakChatReply(reply)
                         }
                         return
                     }
@@ -218,6 +242,7 @@ class MainActivity : FragmentActivity() {
                                 conversationHistory = contextHistory,
                                 userPrompt = trimmed,
                                 preferredLanguage = prefs.preferredChatLanguage,
+                                personalityMode = chatPersonalityMode,
                                 toolExecutor = { name, args ->
                                     executeFunctionCallOnAndroid(name, args)
                                 }
@@ -235,7 +260,7 @@ class MainActivity : FragmentActivity() {
 
                                 if (prefs.isVoiceResponseInChatEnabled) {
                                     isTtsSpeaking = true
-                                    systemEngine?.speak(ChatConversationManager.sanitizeForSpeech(aiReply))
+                                    speakChatReply(aiReply)
                                 } else {
                                     assistantState = AssistantState.IDLE
                                 }
@@ -362,6 +387,7 @@ class MainActivity : FragmentActivity() {
                                     audioLevel = level
                                 },
                                 onSpeakingStateChanged = { isSpeaking ->
+                                    isTtsSpeaking = isSpeaking
                                     assistantState = if (isSpeaking) AssistantState.SPEAKING else AssistantState.IDLE
                                 },
                                 onStatusChanged = { connected, reason ->
@@ -480,6 +506,11 @@ class MainActivity : FragmentActivity() {
                                     activeModel = prefs.selectedGeminiModel,
                                     isVoiceResponseEnabled = prefs.isVoiceResponseInChatEnabled,
                                     isContinuousVoiceEnabled = prefs.isContinuousChatVoiceEnabled,
+                                    personalityMode = chatPersonalityMode,
+                                    onPersonalityModeChange = { mode ->
+                                        chatPersonalityMode = mode
+                                        prefs.chatPersonalityMode = mode
+                                    },
                                     onSendMessage = { text ->
                                         sendChatMessage(text)
                                     },
@@ -508,10 +539,10 @@ class MainActivity : FragmentActivity() {
                                         systemEngine?.stopListening()
                                     },
                                     onSpeakMessage = { text ->
-                                        isTtsSpeaking = true
-                                        systemEngine?.speak(text)
+                                        speakChatReply(text)
                                     },
                                     onStopSpeaking = {
+                                        liveEngine?.stopPlayback()
                                         systemEngine?.stopSpeaking()
                                         isTtsSpeaking = false
                                         assistantState = AssistantState.IDLE
@@ -829,10 +860,19 @@ class MainActivity : FragmentActivity() {
                     phoneControl.handleCallCommand(target)
                 }
                 "send_whatsapp" -> {
-                    val target = args["target"]?.toString() ?: ""
-                    val msg = args["message"]?.toString() ?: ""
-                    whatsAppAutomation.handleWhatsAppCommand(target, msg, autoSend = false) { }
-                    CommandResult.success("WhatsApp पर $target के लिए संदेश तैयार कर दिया गया है।", target = target, detail = msg)
+                    val target = args["target"]?.toString().orEmpty().trim()
+                    val msg = args["message"]?.toString().orEmpty().trim()
+                    if (target.isBlank()) {
+                        CommandResult.failed("WhatsApp संपर्क का नाम या नंबर नहीं मिला।", target = "whatsapp")
+                    } else {
+                        // Return the real launch/compose result; do not report success if WhatsApp
+                        // is missing or the chat could not be opened.
+                        whatsAppAutomation.handleWhatsAppCommand(
+                            target = target,
+                            messageText = msg,
+                            autoSend = false
+                        )
+                    }
                 }
                 "send_sms" -> {
                     val target = args["target"]?.toString() ?: ""
