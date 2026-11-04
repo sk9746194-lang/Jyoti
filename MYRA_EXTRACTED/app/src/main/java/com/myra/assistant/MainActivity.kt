@@ -78,7 +78,8 @@ class MainActivity : FragmentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        // Permissions handled
+        // Start microphone foreground service only after Android has granted RECORD_AUDIO.
+        startWakeWordServiceIfPermitted()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -118,11 +119,6 @@ class MainActivity : FragmentActivity() {
         }
         if (prefs.isKeepScreenOnEnabled) {
             window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-
-        // Start hands-free wake word listener service if enabled
-        if (prefs.isHandsFreeWakeWordEnabled) {
-            com.myra.assistant.services.MyraWakeWordService.start(this)
         }
 
         // 10. APP OPEN PROTECTION
@@ -966,6 +962,25 @@ class MainActivity : FragmentActivity() {
         val missing = permissionManager.checkMissingPermissions()
         if (missing.isNotEmpty()) {
             requestPermissionLauncher.launch(missing.toTypedArray())
+        } else {
+            startWakeWordServiceIfPermitted()
+        }
+    }
+
+    private fun startWakeWordServiceIfPermitted() {
+        val prefs = com.myra.assistant.data.PreferencesManager(this)
+        if (!prefs.isHandsFreeWakeWordEnabled) return
+
+        val hasMicrophonePermission =
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.RECORD_AUDIO
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (hasMicrophonePermission) {
+            com.myra.assistant.services.MyraWakeWordService.start(this)
+        } else {
+            android.util.Log.i("MYRA_Permissions", "Wake-word service waits for RECORD_AUDIO permission.")
         }
     }
 
