@@ -4,6 +4,22 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import android.util.Size
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -70,6 +86,8 @@ fun ChatScreen(
     onClearChatHistory: () -> Unit = {},
     onToggleVoiceResponse: () -> Unit = {},
     onToggleContinuousVoice: () -> Unit = {},
+    liveCameraReady: Boolean = false,
+    onVideoFrame: (ByteArray) -> Unit = {},
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -77,6 +95,18 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     var showClearDialog by remember { mutableStateOf(false) }
+    var liveCameraActive by remember { mutableStateOf(false) }
+    var cameraPermissionDenied by remember { mutableStateOf(false) }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        cameraPermissionDenied = !granted
+        if (granted && liveCameraReady) liveCameraActive = true
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { liveCameraActive = false }
+    }
 
     // Pulsing animation for listening/thinking states
     val infiniteTransition = rememberInfiniteTransition(label = "pulseTransition")
@@ -620,6 +650,47 @@ fun ChatScreen(
         }
 
         // -------------------------------------------------------------
+        // LIVE CAMERA PREVIEW — user-started, visible, 1 JPEG frame/second
+        // -------------------------------------------------------------
+        if (liveCameraActive) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF0D1728))
+                    .border(1.dp, CyanNeon.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                    .padding(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("LIVE CAMERA", color = CyanNeon, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    Text("Gemini Live · लगभग 1 FPS", color = TextSecondary, fontSize = 10.sp)
+                    TextButton(onClick = { liveCameraActive = false }) {
+                        Text("Stop", color = Color(0xFFF87171), fontWeight = FontWeight.Bold)
+                    }
+                }
+                CameraLivePreview(
+                    isStreaming = liveCameraActive,
+                    onFrame = onVideoFrame
+                )
+                Text(
+                    "कैमरा चालू है। MYRA को दृश्य समझने के लिए बोलें या चैट में सवाल लिखें।",
+                    color = TextSecondary,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 5.dp)
+                )
+            }
+        } else if (cameraPermissionDenied) {
+            Text(
+                "कैमरा अनुमति नहीं मिली। Android Settings में Camera permission दें।",
+                color = Color(0xFFFCA5A5),
+                fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+        }
+
+        // -------------------------------------------------------------
         // 4. BOTTOM INPUT BAR (Text + Voice Integration)
         // -------------------------------------------------------------
         Surface(
@@ -633,6 +704,37 @@ fun ChatScreen(
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Explicitly start a visible camera session; no background capture.
+                IconButton(
+                    onClick = {
+                        if (!liveCameraReady) {
+                            Toast.makeText(context, "Gemini Live अभी connected नहीं है।", Toast.LENGTH_SHORT).show()
+                        } else if (liveCameraActive) {
+                            liveCameraActive = false
+                        } else if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                            liveCameraActive = true
+                            cameraPermissionDenied = false
+                        } else {
+                            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                        }
+                    },
+                    enabled = liveCameraReady || liveCameraActive,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(if (liveCameraActive) Color(0xFF3B151E) else Color(0xFF0F1A30))
+                        .border(1.dp, if (liveCameraActive) Color(0xFFF87171) else BorderSlate, CircleShape)
+                ) {
+                    Icon(
+                        if (liveCameraActive) Icons.Default.VideocamOff else Icons.Default.Videocam,
+                        contentDescription = if (liveCameraActive) "Stop live camera" else "Start live camera",
+                        tint = if (liveCameraActive) Color(0xFFF87171) else CyanNeon,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
                 // Microphone Voice Input Button
                 IconButton(
                     onClick = {
@@ -727,6 +829,102 @@ fun ChatScreen(
             }
         }
     }
+
+/**
+ * CameraX preview with user-visible preview and one JPEG snapshot per second.
+ * Camera use is scoped to this composable; leaving Chat unbinds the camera.
+ */
+@Composable
+private fun CameraLivePreview(
+    isStreaming: Boolean,
+    onFrame: (ByteArray) -> Unit
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val previewView = remember {
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        }
+    }
+    val imageCapture = remember {
+        ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setJpegQuality(72)
+            .build()
+    }
+    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+
+    DisposableEffect(lifecycleOwner, previewView) {
+        val providerFuture = ProcessCameraProvider.getInstance(context)
+        val listener = Runnable {
+            try {
+                val provider = providerFuture.get()
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+                provider.unbindAll()
+                provider.bindToLifecycle(
+                    lifecycleOwner,
+                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    preview,
+                    imageCapture
+                )
+                cameraProvider = provider
+            } catch (error: Exception) {
+                android.util.Log.e("MYRA_LiveCamera", "CameraX binding failed", error)
+            }
+        }
+        providerFuture.addListener(listener, ContextCompat.getMainExecutor(context))
+        onDispose {
+            cameraProvider?.unbindAll()
+            cameraProvider = null
+        }
+    }
+
+    AndroidView(
+        factory = { previewView },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(190.dp)
+            .clip(RoundedCornerShape(12.dp))
+    )
+
+    LaunchedEffect(isStreaming, cameraProvider) {
+        val provider = cameraProvider
+        if (!isStreaming || provider == null) return@LaunchedEffect
+        while (isActive) {
+            suspendCancellableCoroutine<Unit> { continuation ->
+                imageCapture.takePicture(
+                    ContextCompat.getMainExecutor(context),
+                    object : ImageCapture.OnImageCapturedCallback() {
+                        override fun onCaptureSuccess(image: androidx.camera.core.ImageProxy) {
+                            try {
+                                val buffer = image.planes.firstOrNull()?.buffer
+                                if (buffer != null) {
+                                    val bytes = ByteArray(buffer.remaining())
+                                    buffer.get(bytes)
+                                    if (bytes.isNotEmpty()) onFrame(bytes)
+                                }
+                            } catch (error: Exception) {
+                                android.util.Log.w("MYRA_LiveCamera", "Frame conversion failed", error)
+                            } finally {
+                                image.close()
+                                if (continuation.isActive) continuation.resume(Unit)
+                            }
+                        }
+
+                        override fun onError(exception: ImageCaptureException) {
+                            android.util.Log.w("MYRA_LiveCamera", "Frame capture failed", exception)
+                            if (continuation.isActive) continuation.resume(Unit)
+                        }
+                    }
+                )
+            }
+            delay(1_000)
+        }
+    }
+}
 
     // Confirmation Dialog for Clearing Chat History
     if (showClearDialog) {
