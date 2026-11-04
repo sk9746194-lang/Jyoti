@@ -7,10 +7,13 @@ import com.google.gson.JsonObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import okhttp3.*
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Universal Gemini Live Voice Engine for MYRA Assistant.
@@ -35,9 +38,26 @@ class GeminiLiveVoiceEngine(
     private val player = AudioTrackPlayer(sampleRate = 24000)
     private val gson = Gson()
     private var isGoogleBidiEndpoint = false
+    @Volatile private var isSessionReady = false
+    private val connectionGeneration = AtomicLong(0L)
+
+    // One FIFO consumer keeps streamed PCM chunks in server order. Launching a coroutine
+    // for every packet can interleave writes and make otherwise-valid Live audio sound choppy.
+    private val audioQueue = Channel<ByteArray>(Channel.UNLIMITED)
+
+    init {
+        scope.launch(Dispatchers.IO) {
+            for (chunk in audioQueue) {
+                player.writeChunk(chunk)
+            }
+        }
+    }
 
     fun connect(wsUrl: String, model: String = LIVE_MODEL) {
+        val attempt = connectionGeneration.incrementAndGet()
+        isSessionReady = false
         isGoogleBidiEndpoint = wsUrl.contains("generativelanguage.googleapis.com")
+        onStatusChanged(false, "Connecting to Google Gemini Live…")
 
         // Strictly decouple Live model from standard chat model - always use models/gemini-3.8-live
         // and never route gemini-2.5-flash or gemini-2.5-pro to the Live API
@@ -45,7 +65,8 @@ class GeminiLiveVoiceEngine(
 
         val client = OkHttpClient.Builder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
-            .connectTimeout(10, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .pingInterval(20, TimeUnit.SECONDS)
             .build()
 
         val request = Request.Builder().url(wsUrl).build()
@@ -57,9 +78,21 @@ class GeminiLiveVoiceEngine(
                 if (isGoogleBidiEndpoint) {
                     // A socket connection is not a ready Live session. Wait for Google's
                     // setupComplete message before enabling native audio capture/playback.
-                    onStatusChanged(false, "Waiting for Google Live setup confirmation")
+                    onStatusChanged(false, "WebSocket connected; waiting for Gemini Live setupComplete")
                     sendGoogleHandshake(webSocket, targetLiveModel)
+                    // A TCP/WebSocket open is not proof that the Live model accepted setup.
+                    // Bound the handshake wait and surface the actual failure instead of
+                    // leaving MYRA in a silent, half-connected state.
+                    scope.launch {
+                        delay(15_000)
+                        if (connectionGeneration.get() == attempt && !isSessionReady) {
+                            val reason = "Gemini Live setup timed out after 15 seconds. Check API key, Live API access, model availability, and network."
+                            onStatusChanged(false, reason)
+                            webSocket.cancel()
+                        }
+                    }
                 } else {
+                    isSessionReady = true
                     onStatusChanged(true, null)
                 }
             }
@@ -81,9 +114,7 @@ class GeminiLiveVoiceEngine(
                         val pcmBytes = Base64.decode(base64, Base64.DEFAULT)
                         onSpeakingStateChanged(true)
                         calculatePcmRms(pcmBytes)
-                        scope.launch(Dispatchers.IO) {
-                            player.writeChunk(pcmBytes)
-                        }
+                        audioQueue.trySend(pcmBytes.copyOf())
                     } else if (type == "transcript") {
                         val transcript = json.get("text")?.asString ?: ""
                         onTranscript(transcript)
@@ -98,13 +129,15 @@ class GeminiLiveVoiceEngine(
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.w(tag, "Live session error: ${t.message}")
-                onStatusChanged(false, t.message)
+                isSessionReady = false
+                onStatusChanged(false, t.message ?: "Gemini Live WebSocket failed")
                 onSpeakingStateChanged(false)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.i(tag, "Live session closed: code $code, reason: $reason")
-                onStatusChanged(false, reason)
+                isSessionReady = false
+                onStatusChanged(false, reason.ifBlank { "Gemini Live session closed" })
                 onSpeakingStateChanged(false)
             }
         })
@@ -145,6 +178,8 @@ class GeminiLiveVoiceEngine(
         // Handshake response confirmation
         if (root.has("setupComplete")) {
             Log.i(tag, "Gemini Live setup complete confirmed by Google Bidi server")
+            isSessionReady = true
+            Log.i(tag, "Gemini Live session is ready; native audio can now be sent")
             onStatusChanged(true, null)
             return
         }
@@ -155,6 +190,7 @@ class GeminiLiveVoiceEngine(
             // Real-time interruption handling (user barge-in)
             if (serverContent.optBoolean("interrupted", false)) {
                 Log.d(tag, "User interruption detected - clearing audio buffers")
+                while (audioQueue.tryReceive().isSuccess) { /* discard interrupted audio */ }
                 player.stop()
                 onSpeakingStateChanged(false)
                 onAudioLevel(0f)
@@ -173,9 +209,7 @@ class GeminiLiveVoiceEngine(
                             val rawBytes = Base64.decode(base64Data, Base64.DEFAULT)
                             onSpeakingStateChanged(true)
                             calculatePcmRms(rawBytes)
-                            scope.launch(Dispatchers.IO) {
-                                player.writeChunk(rawBytes)
-                            }
+                            audioQueue.trySend(rawBytes.copyOf())
                         }
                         if (part.has("text")) {
                             val chunkText = part.getString("text")
@@ -205,6 +239,7 @@ class GeminiLiveVoiceEngine(
     }
 
     fun sendAudioChunk(pcmChunk: ByteArray) {
+        if (!isSessionReady) return
         val base64 = Base64.encodeToString(pcmChunk, Base64.NO_WRAP)
         if (isGoogleBidiEndpoint) {
             val payload = JSONObject().apply {
@@ -226,7 +261,8 @@ class GeminiLiveVoiceEngine(
         }
     }
 
-    fun sendTextMessage(text: String) {
+    fun sendTextMessage(text: String): Boolean {
+        if (!isSessionReady) return false
         if (isGoogleBidiEndpoint) {
             val payload = JSONObject().apply {
                 put("clientContent", JSONObject().apply {
@@ -243,23 +279,26 @@ class GeminiLiveVoiceEngine(
                     put("turnComplete", true)
                 })
             }
-            webSocket?.send(payload.toString())
+            return webSocket?.send(payload.toString()) == true
         } else {
             val payload = JsonObject().apply {
                 addProperty("text", text)
             }
-            webSocket?.send(payload.toString())
+            return webSocket?.send(payload.toString()) == true
         }
     }
 
     /** Stops currently buffered Gemini Live audio without closing the session. */
     fun stopPlayback() {
+        while (audioQueue.tryReceive().isSuccess) { /* discard queued audio */ }
         player.stop()
         onSpeakingStateChanged(false)
         onAudioLevel(0f)
     }
 
     fun disconnect() {
+        connectionGeneration.incrementAndGet()
+        isSessionReady = false
         try {
             webSocket?.close(1000, "User exited")
         } catch (_: Exception) {}
