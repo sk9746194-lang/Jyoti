@@ -45,8 +45,10 @@ jobs:
           s = s.replace('implementation("com.google.ai.edge.litertlm:litertlm-android:0.1.0")',
                         'implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")')
           s = s.replace('    composeOptions {\n        kotlinCompilerExtensionVersion = "1.5.11"\n    }\n', '')
+          s = s.replace('    kotlinOptions {\n        jvmTarget = "17"\n    }',
+                        '    kotlin {\n        compilerOptions {\n            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)\n        }\n    }')
           app_gradle.write_text(s)
-          print("Patched MYRA main app to LiteRT-LM 0.18.0 and Kotlin Compose plugin 2.3.0")
+          print("Patched MYRA main app to LiteRT-LM 0.18.0, Kotlin Compose 2.3.0, and compilerOptions JVM_17")
           PY
       - name: Build main app
         working-directory: MYRA_SOURCE
