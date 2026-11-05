@@ -1,0 +1,45 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="192dp"
+    android:viewportWidth="108"
+    android:viewportHeight="192">
+    <!-- Deep Space Background -->
+    <path
+        android:pathData="M0,0h108v192h-108z"
+        android:fillColor="#070C1B" />
+    <!-- Earth Outer Halo -->
+    <path
+        android:pathData="M54,60m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"
+        android:fillColor="#153366" />
+    <path
+        android:pathData="M54,60m-26,0a26,26 0,1 1,52 0a26,26 0,1 1,-52 0"
+        android:fillColor="#0A1E40"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="1" />
+    <!-- AI Female Silhouette -->
+    <path
+        android:pathData="M54,52m-7,0a7,7 0,1 1,14 0a7,7 0,1 1,-14 0"
+        android:fillColor="#00E5FF" />
+    <path
+        android:pathData="M44,74 C44,66 48,62 54,62 C60,62 64,66 64,74 Z"
+        android:fillColor="#00B0FF" />
+    <!-- HUD Rings -->
+    <path
+        android:pathData="M54,115m-36,0a36,36 0,1 1,72 0a36,36 0,1 1,-72 0"
+        android:strokeColor="#FF2A55"
+        android:strokeWidth="1.2" />
+    <path
+        android:pathData="M54,115m-28,0a28,28 0,1 1,56 0a28,28 0,1 1,-56 0"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="1.5" />
+    <!-- Center Orb -->
+    <path
+        android:pathData="M54,115m-14,0a14,14 0,1 1,28 0a14,14 0,1 1,-28 0"
+        android:fillColor="#00E5FF" />
+    <!-- Bottom Portal -->
+    <path
+        android:pathData="M14,175 C24,166 84,166 94,175 C84,184 24,184 14,175 Z"
+        android:fillColor="#183060"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="1.2" />
+</vector>

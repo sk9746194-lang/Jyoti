@@ -27,6 +27,7 @@ MYRA_EXTRACTED/gradle/wrapper/gradle-wrapper.jar
 MYRA_EXTRACTED/gradle/wrapper/gradle-wrapper.properties
 MYRA_EXTRACTED/gradlew
 MYRA_EXTRACTED/gradlew.bat
+MYRA_EXTRACTED/local.properties
 MYRA_EXTRACTED/local.properties.example
 MYRA_EXTRACTED/security_spec.md
 MYRA_EXTRACTED/server/index.html
