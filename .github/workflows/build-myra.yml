@@ -28,6 +28,26 @@ jobs:
         run: |
           unzip -q MYRA_EXTRACTED_SOURCE.zip -d MYRA_SOURCE
           chmod +x MYRA_SOURCE/gradlew
+      - name: Align LiteRT-LM and Compose Kotlin versions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path("MYRA_SOURCE")
+          root_gradle = root / "build.gradle.kts"
+          app_gradle = root / "app/build.gradle.kts"
+          s = root_gradle.read_text()
+          s = s.replace('id("org.jetbrains.kotlin.android") version "1.9.23" apply false',
+                        'id("org.jetbrains.kotlin.android") version "2.3.0" apply false\n    id("org.jetbrains.kotlin.plugin.compose") version "2.3.0" apply false')
+          root_gradle.write_text(s)
+          s = app_gradle.read_text()
+          s = s.replace('    id("org.jetbrains.kotlin.android")', 
+                        '    id("org.jetbrains.kotlin.android")\n    id("org.jetbrains.kotlin.plugin.compose")')
+          s = s.replace('implementation("com.google.ai.edge.litertlm:litertlm-android:0.1.0")',
+                        'implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")')
+          s = s.replace('    composeOptions {\n        kotlinCompilerExtensionVersion = "1.5.11"\n    }\n', '')
+          app_gradle.write_text(s)
+          print("Patched MYRA main app to LiteRT-LM 0.18.0 and Kotlin Compose plugin 2.3.0")
+          PY
       - name: Build main app
         working-directory: MYRA_SOURCE
         run: ./gradlew :app:clean :app:assembleDebug --no-daemon --stacktrace
@@ -39,6 +59,7 @@ jobs:
           path: |
             MYRA_SOURCE/app/build/outputs/apk/debug/app-debug.apk
             MYRA_SOURCE/app/build/reports/
+            MYRA_SOURCE/build/reports/
           if-no-files-found: warn
           retention-days: 14
 
