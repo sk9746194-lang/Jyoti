@@ -28,60 +28,61 @@ jobs:
         run: |
           unzip -q MYRA_EXTRACTED_SOURCE.zip -d MYRA_SOURCE
           chmod +x MYRA_SOURCE/gradlew
-      - name: Align LiteRT-LM and Compose Kotlin versions
+      - name: Align dependencies and repair MYRA source
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
           root = Path("MYRA_SOURCE")
           root_gradle = root / "build.gradle.kts"
           app_gradle = root / "app/build.gradle.kts"
+
           s = root_gradle.read_text()
           s = s.replace('id("org.jetbrains.kotlin.android") version "1.9.23" apply false',
                         'id("org.jetbrains.kotlin.android") version "2.3.0" apply false\n    id("org.jetbrains.kotlin.plugin.compose") version "2.3.0" apply false')
           root_gradle.write_text(s)
+
           s = app_gradle.read_text()
-          s = s.replace('    id("org.jetbrains.kotlin.android")', 
-                        '    id("org.jetbrains.kotlin.android")\n    id("org.jetbrains.kotlin.plugin.compose")')
-          s = s.replace('implementation("com.google.ai.edge.litertlm:litertlm-android:0.1.0")',
-                        'implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")')
-          s = s.replace('    composeOptions {\n        kotlinCompilerExtensionVersion = "1.5.11"\n    }\n', '')
-          s = s.replace('    kotlinOptions {\n        jvmTarget = "17"\n    }',
-                        '    kotlin {\n        compilerOptions {\n            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)\n        }\n    }')
+          if 'id("org.jetbrains.kotlin.plugin.compose")' not in s:
+              s = s.replace('    id("org.jetbrains.kotlin.android")',
+                            '    id("org.jetbrains.kotlin.android")\n    id("org.jetbrains.kotlin.plugin.compose")')
+          s = s.replace('com.google.ai.edge.litertlm:litertlm-android:0.1.0',
+                        'com.google.ai.edge.litertlm:litertlm-android:0.18.0')
+          s = re.sub(r'    composeOptions\s*\{[^}]*\}\s*', '', s)
+          s = re.sub(r'    kotlinOptions\s*\{\s*jvmTarget\s*=\s*"17"\s*\}',
+                     '    kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }', s)
           app_gradle.write_text(s)
-          print("Patched MYRA main app to LiteRT-LM 0.18.0, Kotlin Compose 2.3.0, and compilerOptions JVM_17")
-          # Repair source-level compile blockers in the supplied archive.
+
           main = root / "app/src/main/java/com/myra/assistant/MainActivity.kt"
-          s = main.read_text()
-          broken = '''                                val cancelMsg = ChatMessage(
-                                    sender = "myra",
-                                    text = "Request error: ${e.message}",
-                                    isError = true
-                                )
-                                chatMessages.add(cancelMsg)
-                                isGeneratingChat = false
-                                assistantState = AssistantState.IDLE
-                            }
-                        }
-                    }
-                }
-'''
-          s = s.replace(broken, '''                    }
-                }
-''')
+          lines = main.read_text().splitlines()
+          req = next((i for i, line in enumerate(lines) if 'Request error: ${e.message}' in line), -1)
+          if req >= 0:
+              first = req
+              while first > 0 and "val cancelMsg = ChatMessage(" not in lines[first]:
+                  first -= 1
+              state = next((i for i in range(req, min(req + 8, len(lines))) if "assistantState = AssistantState.IDLE" in lines[i]), -1)
+              if first < req and state >= 0:
+                  del lines[first:state + 3]
+          s = "\n".join(lines) + "\n"
           if "import androidx.compose.ui.unit.dp" not in s:
-              s = s.replace("import androidx.compose.ui.Modifier", "import androidx.compose.ui.Modifier\\nimport androidx.compose.ui.unit.dp\\nimport androidx.compose.ui.unit.sp\\nimport androidx.compose.ui.text.font.FontWeight")
+              s = s.replace("import androidx.compose.ui.Modifier",
+                            "import androidx.compose.ui.Modifier\nimport androidx.compose.ui.unit.dp\nimport androidx.compose.ui.unit.sp\nimport androidx.compose.ui.text.font.FontWeight")
           s = s.replace('prefs.currentMode == "romantic_gf"', 'prefs.personality == "romantic_gf"')
+          s = s.replace("OrbThemeColor.ROMANTIC_ROSE", "OrbThemeColor.ROSE_GOLD")
           main.write_text(s)
 
           security = root / "app/src/main/java/com/myra/assistant/ui/screens/SecurityScreen.kt"
           s = security.read_text()
           if "import androidx.compose.ui.unit.dp" not in s:
-              s = s.replace("import androidx.compose.ui.Modifier", "import androidx.compose.ui.Modifier\\nimport androidx.compose.ui.unit.dp\\nimport androidx.compose.ui.unit.sp")
+              s = s.replace("import androidx.compose.ui.Modifier",
+                            "import androidx.compose.ui.Modifier\nimport androidx.compose.ui.unit.dp\nimport androidx.compose.ui.unit.sp")
           security.write_text(s)
 
           colors = root / "app/src/main/java/com/myra/assistant/ui/theme/Color.kt"
           s = colors.read_text()
-          s += "\\n// Compatibility aliases used by screens.\\nval AccentCyan = CyanNeon\\nval PurpleNeon = AccentIndigo\\n"
+          if "val AccentCyan =" not in s:
+              s += "\n// Compatibility aliases for screen color names.\nval AccentCyan = CyanNeon\nval PurpleNeon = AccentIndigo\n"
           colors.write_text(s)
 
           settings = root / "app/src/main/java/com/myra/assistant/ui/screens/SettingsScreen.kt"
@@ -91,12 +92,7 @@ jobs:
           s = s.replace("WhatsAppAutomation.openAccessibilitySettings(context)", "WhatsAppAutomation(context).openAccessibilitySettings()")
           settings.write_text(s)
 
-          models = root / "app/src/main/java/com/myra/assistant/ui/orb/OrbModels.kt"
-          s = models.read_text().replace("ROMANTIC_ROSE", "ROSE_GOLD")
-          models.write_text(s)
-          activity = main
-          print("Applied Kotlin/source compatibility repairs to extracted MYRA project")
-
+          print("Dependency and source compatibility patches applied.")
           PY
       - name: Build main app
         working-directory: MYRA_SOURCE
