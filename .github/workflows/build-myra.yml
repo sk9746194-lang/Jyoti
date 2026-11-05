@@ -14,11 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
       - uses: android-actions/setup-android@v3
       - name: Extract source ZIP
         run: |
@@ -27,7 +26,7 @@ jobs:
       - name: Build main app
         working-directory: MYRA_SOURCE
         run: ./gradlew :app:clean :app:assembleDebug --no-daemon --stacktrace
-      - name: Upload main APK
+      - name: Upload main APK and reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -43,11 +42,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
       - uses: android-actions/setup-android@v3
       - name: Extract source ZIP
         run: |
@@ -56,7 +54,7 @@ jobs:
       - name: Build companion app
         working-directory: MYRA_SOURCE/MYRA_Companion_Project
         run: ./gradlew :app:clean :app:assembleDebug --no-daemon --stacktrace
-      - name: Upload companion APK
+      - name: Upload companion APK and reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
