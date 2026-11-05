@@ -49,6 +49,54 @@ jobs:
                         '    kotlin {\n        compilerOptions {\n            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)\n        }\n    }')
           app_gradle.write_text(s)
           print("Patched MYRA main app to LiteRT-LM 0.18.0, Kotlin Compose 2.3.0, and compilerOptions JVM_17")
+          # Repair source-level compile blockers in the supplied archive.
+          main = root / "app/src/main/java/com/myra/assistant/MainActivity.kt"
+          s = main.read_text()
+          broken = '''                                val cancelMsg = ChatMessage(
+                                    sender = "myra",
+                                    text = "Request error: ${e.message}",
+                                    isError = true
+                                )
+                                chatMessages.add(cancelMsg)
+                                isGeneratingChat = false
+                                assistantState = AssistantState.IDLE
+                            }
+                        }
+                    }
+                }
+'''
+          s = s.replace(broken, '''                    }
+                }
+''')
+          if "import androidx.compose.ui.unit.dp" not in s:
+              s = s.replace("import androidx.compose.ui.Modifier", "import androidx.compose.ui.Modifier\\nimport androidx.compose.ui.unit.dp\\nimport androidx.compose.ui.unit.sp\\nimport androidx.compose.ui.text.font.FontWeight")
+          s = s.replace('prefs.currentMode == "romantic_gf"', 'prefs.personality == "romantic_gf"')
+          main.write_text(s)
+
+          security = root / "app/src/main/java/com/myra/assistant/ui/screens/SecurityScreen.kt"
+          s = security.read_text()
+          if "import androidx.compose.ui.unit.dp" not in s:
+              s = s.replace("import androidx.compose.ui.Modifier", "import androidx.compose.ui.Modifier\\nimport androidx.compose.ui.unit.dp\\nimport androidx.compose.ui.unit.sp")
+          security.write_text(s)
+
+          colors = root / "app/src/main/java/com/myra/assistant/ui/theme/Color.kt"
+          s = colors.read_text()
+          s += "\\n// Compatibility aliases used by screens.\\nval AccentCyan = CyanNeon\\nval PurpleNeon = AccentIndigo\\n"
+          colors.write_text(s)
+
+          settings = root / "app/src/main/java/com/myra/assistant/ui/screens/SettingsScreen.kt"
+          s = settings.read_text()
+          s = s.replace("WhatsAppAutomation.isAccessibilityActive(context)", "WhatsAppAutomation(context).isAccessibilityActive()")
+          s = s.replace("WhatsAppAutomation.isInstalled(context)", "WhatsAppAutomation(context).isInstalled()")
+          s = s.replace("WhatsAppAutomation.openAccessibilitySettings(context)", "WhatsAppAutomation(context).openAccessibilitySettings()")
+          settings.write_text(s)
+
+          models = root / "app/src/main/java/com/myra/assistant/ui/orb/OrbModels.kt"
+          s = models.read_text().replace("ROMANTIC_ROSE", "ROSE_GOLD")
+          models.write_text(s)
+          activity = main
+          print("Applied Kotlin/source compatibility repairs to extracted MYRA project")
+
           PY
       - name: Build main app
         working-directory: MYRA_SOURCE
