@@ -178,11 +178,12 @@ jobs:
           p = root / "app/src/main/java/com/myra/assistant/vision/CameraVisionManager.kt"
           s = p.read_text()
           if "import java.io.IOException" not in s:
-              s = s.replace("import java.io.File", "import java.io.File\nimport java.io.IOException")
+              s = re.sub(r"^(package [^\n]+\n)", r"\1import java.io.IOException\n", s, count=1, flags=re.MULTILINE)
           p.write_text(s)
 
           p = root / "app/src/main/java/com/myra/assistant/voice/SystemSpeechEngine.kt"
-          s = p.read_text().replace('                putExtra(RecognizerIntent.EXTRA_ADDITIONAL_LANGUAGES, arrayOf("en-IN", "en-US"))\n', "")
+          s = p.read_text()
+          s = re.sub(r"(?m)^.*EXTRA_ADDITIONAL_LANGUAGES.*(?:\n|$)", "", s)
           p.write_text(s)
 
           print("Dependency and source compatibility patches applied.")
