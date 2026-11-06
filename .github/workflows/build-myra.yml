@@ -102,11 +102,11 @@ jobs:
           s = s.replace("Icons.Default.Psychology", "Icons.Default.Build")
           if "import com.myra.assistant.ui.screens.MyraConnectScreen" not in s:
               s = s.replace("import com.myra.assistant.ui.screens.MainVoiceScreen",
-                            "import com.myra.assistant.ui.screens.MainVoiceScreen\\nimport com.myra.assistant.ui.screens.MyraConnectScreen")
+                            "import com.myra.assistant.ui.screens.MainVoiceScreen\nimport com.myra.assistant.ui.screens.MyraConnectScreen")
           p.write_text(s)
 
           p = root / "app/src/main/java/com/myra/assistant/provider/AIProviderManager.kt"
-          s = p.read_text().replace(",\\n                        isError = true", "").replace(",\\n                    isError = true", "")
+          s = p.read_text().replace(",\n                        isError = true", "").replace(",\n                    isError = true", "")
           p.write_text(s)
 
           p = root / "app/src/main/java/com/myra/assistant/offline/OfflineCommandEngine.kt"
@@ -115,7 +115,7 @@ jobs:
           p.write_text(s)
 
           p = root / "app/src/main/java/com/myra/assistant/offline/OfflineModeManager.kt"
-          s = p.read_text().replace("var bytesRead: Int\\n", "var bytesRead: Int = 0\\n")
+          s = p.read_text().replace("var bytesRead: Int\n", "var bytesRead: Int = 0\n")
           p.write_text(s)
 
           p = root / "app/src/main/java/com/myra/assistant/provider/LocalModelProvider.kt"
@@ -130,10 +130,10 @@ jobs:
 
           p = root / "app/src/main/java/com/myra/assistant/services/MyraWakeWordService.kt"
           s = p.read_text()
-          imports = "import com.myra.assistant.MainActivity\\nimport com.myra.assistant.MyraApplication\\nimport com.myra.assistant.data.PreferencesManager\\nimport java.util.Locale\\n"
+          imports = "import com.myra.assistant.MainActivity\nimport com.myra.assistant.MyraApplication\nimport com.myra.assistant.data.PreferencesManager\nimport java.util.Locale\n"
           if "import com.myra.assistant.MainActivity" not in s:
               s = s.replace("import android.app.Notification", imports + "import android.app.Notification")
-          s = s.replace('                putExtra(RecognizerIntent.EXTRA_ADDITIONAL_LANGUAGES, arrayOf("en-IN", "en-US"))\\n', "")
+          s = s.replace('                putExtra(RecognizerIntent.EXTRA_ADDITIONAL_LANGUAGES, arrayOf("en-IN", "en-US"))\n', "")
           p.write_text(s)
 
           p = root / "app/src/main/java/com/myra/assistant/tools/ActionBrain.kt"
@@ -156,14 +156,14 @@ jobs:
           s = p.read_text()
           for name, expr in [("AccentRed", "Color(0xFFEF4444)"), ("AccentCyan", "CyanNeon"), ("PurpleNeon", "AccentIndigo")]:
               if f"val {name} =" not in s:
-                  s += f"\\nval {name} = {expr}\\n"
+                  s += f"\nval {name} = {expr}\n"
           p.write_text(s)
 
           p = root / "app/src/main/java/com/myra/assistant/ui/screens/MainVoiceScreen.kt"
           s = p.read_text()
-          s = s.replace("    val context = LocalContext.current\\n",
-                        "    val context = LocalContext.current\\n    val prefs = remember { PreferencesManager(context) }\\n", 1)
-          s = s.replace("                val prefs = remember { PreferencesManager(context) }\\n                val photoPath = prefs.customPhotoPath",
+          s = s.replace("    val context = LocalContext.current\n",
+                        "    val context = LocalContext.current\n    val prefs = remember { PreferencesManager(context) }\n", 1)
+          s = s.replace("                val prefs = remember { PreferencesManager(context) }\n                val photoPath = prefs.customPhotoPath",
                         "                val photoPath = prefs.customPhotoPath")
           p.write_text(s)
 
@@ -171,17 +171,17 @@ jobs:
           s = p.read_text()
           if "import androidx.compose.foundation.clickable" not in s:
               s = s.replace("import androidx.compose.foundation.background",
-                            "import androidx.compose.foundation.background\\nimport androidx.compose.foundation.clickable")
+                            "import androidx.compose.foundation.background\nimport androidx.compose.foundation.clickable")
           p.write_text(s)
 
           p = root / "app/src/main/java/com/myra/assistant/vision/CameraVisionManager.kt"
           s = p.read_text()
           if "import java.io.IOException" not in s:
-              s = s.replace("import java.io.File", "import java.io.File\\nimport java.io.IOException")
+              s = s.replace("import java.io.File", "import java.io.File\nimport java.io.IOException")
           p.write_text(s)
 
           p = root / "app/src/main/java/com/myra/assistant/voice/SystemSpeechEngine.kt"
-          s = p.read_text().replace('                putExtra(RecognizerIntent.EXTRA_ADDITIONAL_LANGUAGES, arrayOf("en-IN", "en-US"))\\n', "")
+          s = p.read_text().replace('                putExtra(RecognizerIntent.EXTRA_ADDITIONAL_LANGUAGES, arrayOf("en-IN", "en-US"))\n', "")
           p.write_text(s)
 
           print("Dependency and source compatibility patches applied.")
