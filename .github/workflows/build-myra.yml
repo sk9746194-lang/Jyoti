@@ -130,6 +130,7 @@ jobs:
 
           p = root / "app/src/main/java/com/myra/assistant/services/MyraWakeWordService.kt"
           s = p.read_text()
+          s = s.replace('rawSpeech.substring(idx + trig.length).trim(" ,.!?".toCharArray())', "rawSpeech.substring(idx + trig.length).trim(' ', ',', '.', '!', '?')")
           imports = "import com.myra.assistant.MainActivity\nimport com.myra.assistant.MyraApplication\nimport com.myra.assistant.data.PreferencesManager\nimport java.util.Locale\n"
           if "import com.myra.assistant.MainActivity" not in s:
               s = s.replace("import android.app.Notification", imports + "import android.app.Notification")
