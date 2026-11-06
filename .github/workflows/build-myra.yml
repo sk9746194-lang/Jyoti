@@ -186,6 +186,64 @@ jobs:
           s = re.sub(r"(?m)^.*EXTRA_ADDITIONAL_LANGUAGES.*(?:\n|$)", "", s)
           p.write_text(s)
 
+          # Improve the offline model panel: prevent stale benchmark/model labels and avoid cramped status text.
+          p = root / "app/src/main/java/com/myra/assistant/ui/screens/SettingsScreen.kt"
+          s = p.read_text()
+          old_status = """                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Storage Available: ${metrics.freeStorageMb} MB", color = TextSecondary, fontSize = 11.sp)
+                                Text("Status: $statusMessage", color = LightBlue, fontSize = 11.sp)
+                            }"""
+          new_status = """                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Text(
+                                    "Storage Available: ${metrics.freeStorageMb} MB",
+                                    color = TextSecondary,
+                                    fontSize = 11.sp
+                                )
+                                Text(
+                                    "Status: $statusMessage",
+                                    color = LightBlue,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }"""
+          if old_status in s:
+              s = s.replace(old_status, new_status, 1)
+          else:
+              print("Status row already changed or source differs; leaving it unchanged.")
+
+          state_anchor = """    var benchmarkResult by remember { mutableStateOf<LocalModelBenchmarkResult?>(null) }
+    var isRunningBenchmark by remember { mutableStateOf(false) }"""
+          state_fixed = state_anchor + """
+    // Clear benchmark data when selected model changes; old results must not carry over.
+    LaunchedEffect(selectedOfflineModel.modelId) {
+        benchmarkResult = null
+    }"""
+          if "LaunchedEffect(selectedOfflineModel.modelId)" not in s:
+              if state_anchor not in s:
+                  raise SystemExit("Could not find benchmark state anchor in SettingsScreen.kt")
+              s = s.replace(state_anchor, state_fixed, 1)
+
+          old_benchmark = """                                Text("📊 Benchmark: ${res.modelName}", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("• Speed: ${res.tokensPerSecond} tokens/sec (TTFT: ${res.timeToFirstTokenMs} ms)", color = LightBlue, fontSize = 10.sp)
+                                Text("• Threads: ${res.cpuThreadsUsed} • RAM: ${res.memoryUsageMb} MB • Thermal: ${res.thermalStatus}", color = TextSecondary, fontSize = 10.sp)"""
+          new_benchmark = """                                Text("📊 Benchmark: ${res.modelName}", color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                if (res.generatedTokenCount > 0) {
+                                    Text("• Speed: ${res.tokensPerSecond} tokens/sec (TTFT: ${res.timeToFirstTokenMs} ms)", color = LightBlue, fontSize = 10.sp)
+                                    Text("• Generated tokens: ${res.generatedTokenCount}", color = TextSecondary, fontSize = 10.sp)
+                                } else {
+                                    Text("• Inference not completed: 0 tokens generated", color = LightBlue, fontSize = 10.sp)
+                                    Text("• Check that this model is downloaded and installed, then retry.", color = TextSecondary, fontSize = 10.sp)
+                                }
+                                Text("• Threads: ${res.cpuThreadsUsed} • Device RAM used: ${res.memoryUsageMb} MB • Thermal: ${res.thermalStatus}", color = TextSecondary, fontSize = 10.sp)"""
+          if old_benchmark in s:
+              s = s.replace(old_benchmark, new_benchmark, 1)
+          else:
+              print("Benchmark display already changed or source differs; leaving it unchanged.")
+          p.write_text(s)
+
           print("Dependency and source compatibility patches applied.")
           PY
       - name: Build main app
