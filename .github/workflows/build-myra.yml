@@ -92,6 +92,98 @@ jobs:
           s = s.replace("WhatsAppAutomation.openAccessibilitySettings(context)", "WhatsAppAutomation(context).openAccessibilitySettings()")
           settings.write_text(s)
 
+          # Fix API/model mismatches found by the Kotlin compiler.
+          p = root / "app/src/main/java/com/myra/assistant/MainActivity.kt"
+          s = p.read_text()
+          s = s.replace("history = contextHistory.map { it.sender to it.text },", "history = contextHistory,")
+          s = s.replace("isError = providerResp.isError", "isError = providerResp.errorMessage != null")
+          s = s.replace("prefs.currentMode == \"romantic_gf\"", "prefs.personality == \"romantic_gf\"")
+          s = s.replace("OrbThemeColor.ROMANTIC_ROSE", "OrbThemeColor.ROSE_GOLD")
+          s = s.replace("Icons.Default.Psychology", "Icons.Default.Build")
+          if "import com.myra.assistant.ui.screens.MyraConnectScreen" not in s:
+              s = s.replace("import com.myra.assistant.ui.screens.MainVoiceScreen",
+                            "import com.myra.assistant.ui.screens.MainVoiceScreen\\nimport com.myra.assistant.ui.screens.MyraConnectScreen")
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/provider/AIProviderManager.kt"
+          s = p.read_text().replace(",\\n                        isError = true", "").replace(",\\n                    isError = true", "")
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/offline/OfflineCommandEngine.kt"
+          s = p.read_text().replace("val launched = appLauncher.launchAppByName(appName)",
+                                    "val launched = appLauncher.launchAppByName(appName).success")
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/offline/OfflineModeManager.kt"
+          s = p.read_text().replace("var bytesRead: Int\\n", "var bytesRead: Int = 0\\n")
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/provider/LocalModelProvider.kt"
+          s = p.read_text().replace("LocalMemoryRepository.getInstance(context)", "LocalMemoryRepository(context)")
+          s = s.replace("localMemoryRepo.getPersonalityIsolatedMemories(isCompanionMode, limit = 5)",
+                        'localMemoryRepo.searchMemoriesIsolated("", if (isCompanionMode) "romantic_gf" else "friendly_assistant").take(5)')
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/security/BiometricManager.kt"
+          s = p.read_text().replace("com.google.code.gson", "com.google.gson")
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/services/MyraWakeWordService.kt"
+          s = p.read_text()
+          imports = "import com.myra.assistant.MainActivity\\nimport com.myra.assistant.MyraApplication\\nimport com.myra.assistant.data.PreferencesManager\\nimport java.util.Locale\\n"
+          if "import com.myra.assistant.MainActivity" not in s:
+              s = s.replace("import android.app.Notification", imports + "import android.app.Notification")
+          s = s.replace('                putExtra(RecognizerIntent.EXTRA_ADDITIONAL_LANGUAGES, arrayOf("en-IN", "en-US"))\\n', "")
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/tools/ActionBrain.kt"
+          s = p.read_text()
+          s = s.replace("permissionManager.hasPermission(plan.requiredPermission)",
+                        "androidx.core.content.ContextCompat.checkSelfPermission(context, plan.requiredPermission) == android.content.pm.PackageManager.PERMISSION_GRANTED")
+          s = s.replace("deviceControlManager.toggleTorch(turnOn)", "deviceControlManager.toggleFlashlight(turnOn).success")
+          s = s.replace("phoneCallManager.makeCall(target)", "phoneCallManager.handleCallCommand(target).success")
+          s = s.replace("whatsAppAutomation.sendMessage(contact, message)",
+                        "whatsAppAutomation.handleWhatsAppCommand(contact, message, autoSend = true).success")
+          s = s.replace("val success = deviceControlManager.triggerEmergencySOS()",
+                        "val success = false // SOS dispatch is not implemented; never claim success.")
+          s = s.replace("Emergency SOS trigger kiya gaya aur contacts ko alert bheja gaya.",
+                        "Emergency SOS सुविधा अभी इस build में उपलब्ध नहीं है।")
+          s = s.replace("Emergency SOS triggered and emergency alerts sent.",
+                        "Emergency SOS is not implemented in this build.")
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/ui/theme/Color.kt"
+          s = p.read_text()
+          for name, expr in [("AccentRed", "Color(0xFFEF4444)"), ("AccentCyan", "CyanNeon"), ("PurpleNeon", "AccentIndigo")]:
+              if f"val {name} =" not in s:
+                  s += f"\\nval {name} = {expr}\\n"
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/ui/screens/MainVoiceScreen.kt"
+          s = p.read_text()
+          s = s.replace("    val context = LocalContext.current\\n",
+                        "    val context = LocalContext.current\\n    val prefs = remember { PreferencesManager(context) }\\n", 1)
+          s = s.replace("                val prefs = remember { PreferencesManager(context) }\\n                val photoPath = prefs.customPhotoPath",
+                        "                val photoPath = prefs.customPhotoPath")
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/ui/screens/SecurityScreen.kt"
+          s = p.read_text()
+          if "import androidx.compose.foundation.clickable" not in s:
+              s = s.replace("import androidx.compose.foundation.background",
+                            "import androidx.compose.foundation.background\\nimport androidx.compose.foundation.clickable")
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/vision/CameraVisionManager.kt"
+          s = p.read_text()
+          if "import java.io.IOException" not in s:
+              s = s.replace("import java.io.File", "import java.io.File\\nimport java.io.IOException")
+          p.write_text(s)
+
+          p = root / "app/src/main/java/com/myra/assistant/voice/SystemSpeechEngine.kt"
+          s = p.read_text().replace('                putExtra(RecognizerIntent.EXTRA_ADDITIONAL_LANGUAGES, arrayOf("en-IN", "en-US"))\\n', "")
+          p.write_text(s)
+
           print("Dependency and source compatibility patches applied.")
           PY
       - name: Build main app
