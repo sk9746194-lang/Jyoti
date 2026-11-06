@@ -220,100 +220,89 @@ jobs:
               s = s.replace(old_lines[0] + '\n' + old_lines[1], '\n'.join(new_lines), 1)
           p.write_text(s)
           print("Offline model screen layout and benchmark fixes applied.")
-          # Let the central provider router use a downloaded local model even when no Gemini key exists.
-          p = root / "app/src/main/java/com/myra/assistant/MainActivity.kt"
-          s = p.read_text()
-          s, removed = re.subn(
-              r'\n                    if \(!prefs\.hasConfiguredApiKey\) \{.*?\n                    \}\n\n                    val contextHistory',
-              '\n                    val contextHistory',
-              s,
-              count=1,
-              flags=re.DOTALL
-          )
-          if removed != 1:
-              print("No-key early return was not found; MainActivity left unchanged for this patch.")
-          p.write_text(s)
+          print("Dependency and source compatibility patches applied.")
+          PY
+      - name: Fix offline routing and reliable Hindi-English TTS
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
 
-          # Make system TTS resilient to asynchronous initialization and missing Google TTS engine.
-          p = root / "app/src/main/java/com/myra/assistant/voice/SystemSpeechEngine.kt"
-          s = p.read_text()
-          if "private var pendingSpeech: Triple<String, Float, Float>? = null" not in s:
-              s = s.replace(
+          root = Path("MYRA_SOURCE")
+          main = root / "app/src/main/java/com/myra/assistant/MainActivity.kt"
+          source = main.read_text()
+          pattern = r'\n                    if \(!prefs\.hasConfiguredApiKey\) \{.*?\n                    \}\n\n                    val contextHistory'
+          source, count = re.subn(pattern, '\n                    val contextHistory', source, count=1, flags=re.DOTALL)
+          print("Removed API-key early return:", count)
+          main.write_text(source)
+
+          speech = root / "app/src/main/java/com/myra/assistant/voice/SystemSpeechEngine.kt"
+          source = speech.read_text()
+          if "private var pendingSpeech: Triple<String, Float, Float>? = null" not in source:
+              source = source.replace(
                   "    private var activeUtteranceId: String? = null",
                   "    private var activeUtteranceId: String? = null\n    private var pendingSpeech: Triple<String, Float, Float>? = null\n    private var defaultEngineFallbackAttempted = false",
                   1
               )
-          old_failure = '''        } else {
+
+          source = source.replace(
+              '''        } else {
               Log.e(tag, "TextToSpeech initialization failed with status $status")
               onError(status, "TextToSpeech init failed")
-          }'''
-          new_failure = '''        } else {
+          }''',
+              '''        } else {
               Log.e(tag, "TextToSpeech initialization failed with status $status")
               if (!defaultEngineFallbackAttempted && !isDestroyed) {
                   defaultEngineFallbackAttempted = true
                   try {
                       tts?.shutdown()
                       tts = TextToSpeech(context.applicationContext, this)
-                      Log.w(tag, "Retrying TTS initialization with the system default engine")
                   } catch (e: Exception) {
-                      Log.e(tag, "Default TTS engine initialization failed: ${e.message}")
-                      onError(status, "TextToSpeech init failed")
+                      onError(status, "TextToSpeech init failed: ${e.message}")
                   }
               } else {
                   onError(status, "TextToSpeech init failed")
               }
-          }'''
-          if old_failure in s:
-              s = s.replace(old_failure, new_failure, 1)
-          else:
-              print("TTS init failure branch differs; fallback block not changed.")
+          }''',
+              1
+          )
 
-          old_ready = '''            isTtsReady = true
-        } else {'''
-          new_ready = '''            isTtsReady = true
-            val queued = pendingSpeech
-            pendingSpeech = null
-            if (queued != null) {
-                mainHandler.post { speak(queued.first, queued.second, queued.third) }
-            }
-        } else {'''
-          if old_ready in s:
-              s = s.replace(old_ready, new_ready, 1)
+          source = source.replace(
+              "            isTtsReady = true",
+              """            isTtsReady = true
+              val queuedSpeech = pendingSpeech
+              pendingSpeech = null
+              if (queuedSpeech != null) {
+                  mainHandler.post { speak(queuedSpeech.first, queuedSpeech.second, queuedSpeech.third) }
+              }""",
+              1
+          )
 
-          old_not_ready = '''            if (!isTtsReady || tts == null) {
-                Log.w(tag, "TTS not ready yet; attempting lazy initialization")
-                return@post
-            }
+          source = source.replace(
+              '''            if (!isTtsReady || tts == null) {
+                  Log.w(tag, "TTS not ready yet; attempting lazy initialization")
+                  return@post
+              }
 
-            try {
-                tts?.setSpeechRate(rate.coerceIn(0.5f, 2.0f))
-                tts?.setPitch(pitch.coerceIn(0.5f, 2.0f))'''
-          new_not_ready = '''            if (!isTtsReady || tts == null) {
-                Log.w(tag, "TTS is initializing; queueing the latest response")
-                pendingSpeech = Triple(cleanSpeech, rate, pitch)
-                return@post
-            }
+              try {
+                  tts?.setSpeechRate(rate.coerceIn(0.5f, 2.0f))''',
+              '''            if (!isTtsReady || tts == null) {
+                  pendingSpeech = Triple(cleanSpeech, rate, pitch)
+                  Log.w(tag, "TTS initializing; response queued")
+                  return@post
+              }
 
-            try {
-                val speechLocale = if (cleanSpeech.any { it in '\\u0900'..'\\u097F' }) {
-                    Locale("hi", "IN")
-                } else {
-                    Locale("en", "IN")
-                }
-                val languageStatus = tts?.setLanguage(speechLocale)
-                if (languageStatus == TextToSpeech.LANG_MISSING_DATA ||
-                    languageStatus == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    Log.w(tag, "Requested speech locale unavailable: $speechLocale; using engine default")
-                }
-                tts?.setSpeechRate(rate.coerceIn(0.5f, 2.0f))
-                tts?.setPitch(pitch.coerceIn(0.5f, 2.0f))'''
-          if old_not_ready in s:
-              s = s.replace(old_not_ready, new_not_ready, 1)
-          else:
-              print("TTS speak readiness block differs; queue/locales not changed.")
-          p.write_text(s)
-
-          print("Dependency and source compatibility patches applied.")
+              try {
+                  val speechLocale = if (cleanSpeech.any { it in '\u0900'..'\u097F' }) Locale("hi", "IN") else Locale("en", "IN")
+                  val languageStatus = tts?.setLanguage(speechLocale)
+                  if (languageStatus == TextToSpeech.LANG_MISSING_DATA || languageStatus == TextToSpeech.LANG_NOT_SUPPORTED) {
+                      Log.w(tag, "Speech locale unavailable: $speechLocale")
+                  }
+                  tts?.setSpeechRate(rate.coerceIn(0.5f, 2.0f))''',
+              1
+          )
+          speech.write_text(source)
+          print("Offline routing and TTS patches applied.")
           PY
       - name: Build main app
         working-directory: MYRA_SOURCE
