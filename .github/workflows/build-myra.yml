@@ -448,9 +448,6 @@ jobs:
           path: MYRA_SOURCE/
           if-no-files-found: error
           retention-days: 1
-      - name: Build main app
-        working-directory: MYRA_SOURCE
-        run: ./gradlew :app:clean :app:assembleDebug --no-daemon --stacktrace
       - name: Update GitHub source ZIP with patched MYRA source
         if: success()
         run: |
@@ -484,9 +481,12 @@ jobs:
           if git diff --cached --quiet; then
             echo "Source ZIP already contains the validated fixes."
           else
-            git commit -m "Update MYRA source ZIP with validated fixes"
+            git commit -m "Update MYRA source ZIP with validated fixes [skip ci]"
             git push origin HEAD:main
           fi
+      - name: Build main app
+        working-directory: MYRA_SOURCE
+        run: ./gradlew :app:clean :app:assembleDebug --no-daemon --stacktrace
       - name: Upload main APK and reports
         if: always()
         uses: actions/upload-artifact@v4
