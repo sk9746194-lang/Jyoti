@@ -1,0 +1,53 @@
+name: Inspect MYRA source ZIP
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/inspect-myra-zip.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate and extract MYRA source ZIP
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, BadZipFile
+
+          archive = Path("MYRA_EXTRACTED_SOURCE.zip")
+          if not archive.is_file():
+              raise SystemExit("MYRA_EXTRACTED_SOURCE.zip is missing")
+          print(f"Archive size: {archive.stat().st_size} bytes")
+          try:
+              with ZipFile(archive) as z:
+                  bad = z.testzip()
+                  if bad:
+                      raise SystemExit(f"Corrupt ZIP member: {bad}")
+                  names = z.namelist()
+                  print(f"ZIP members: {len(names)}")
+                  for name in names[:200]:
+                      print(name)
+                  z.extractall("MYRA_SOURCE")
+          except BadZipFile as e:
+              raise SystemExit(f"Invalid ZIP: {e}")
+          root = Path("MYRA_SOURCE")
+          for candidate in (root, *root.iterdir()):
+              if candidate.is_dir() and (candidate / "settings.gradle" ).exists() or candidate.is_dir() and (candidate / "settings.gradle.kts").exists():
+                  print(f"Gradle project root: {candidate}")
+          PY
+
+      - name: Upload extracted source for review
+        uses: actions/upload-artifact@v4
+        with:
+          name: MYRA-Extracted-Source-For-Review
+          path: MYRA_SOURCE/
+          if-no-files-found: error
+          retention-days: 1
