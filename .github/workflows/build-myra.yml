@@ -441,6 +441,13 @@ jobs:
           p.write_text(s)
           print("Gemma gated-download and token UI patches applied.")
           PY
+      - name: Upload patched MYRA source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: MYRA-Patched-Source-Snapshot
+          path: MYRA_SOURCE/
+          if-no-files-found: error
+          retention-days: 1
       - name: Build main app
         working-directory: MYRA_SOURCE
         run: ./gradlew :app:clean :app:assembleDebug --no-daemon --stacktrace
