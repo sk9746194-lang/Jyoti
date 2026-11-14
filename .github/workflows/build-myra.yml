@@ -441,6 +441,57 @@ jobs:
           p.write_text(s)
           print("Gemma gated-download and token UI patches applied.")
           PY
+      - name: Normalize repeated source patches before build
+        working-directory: MYRA_SOURCE
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Earlier patch attempts could be applied repeatedly to an already
+          # patched ZIP. Collapse duplicate declarations and repeated edits.
+          p = Path("app/src/main/java/com/myra/assistant/security/SecureKeyStorage.kt")
+          s = p.read_text()
+          line = '        private const val KEY_HUGGING_FACE_TOKEN = "encrypted_hugging_face_read_token"'
+          while s.count(line) > 1:
+              pos = s.find(line, s.find(line) + len(line))
+              s = s[:pos] + s[pos + len(line):]
+          p.write_text(s)
+
+          p = Path("app/src/main/java/com/myra/assistant/ui/screens/MainVoiceScreen.kt")
+          s = p.read_text()
+          line = '    val prefs = remember { PreferencesManager(context) }'
+          while s.count(line) > 1:
+              pos = s.find(line, s.find(line) + len(line))
+              s = s[:pos] + s[pos + len(line):]
+          p.write_text(s)
+
+          p = Path("app/src/main/java/com/myra/assistant/voice/SystemSpeechEngine.kt")
+          s = p.read_text()
+          block = """            val queuedSpeech = pendingSpeech
+              pendingSpeech = null
+              if (queuedSpeech != null) {
+                  mainHandler.post { speak(queuedSpeech.first, queuedSpeech.second, queuedSpeech.third) }
+              }"""
+          # Remove immediately repeated queue-drain blocks, retaining one.
+          doubled = block + "\n" + block
+          while doubled in s:
+              s = s.replace(doubled, block)
+          # Normalize indentation variants emitted by prior patch passes.
+          s = re.sub(r'(\n\s*val queuedSpeech = pendingSpeech\n\s*pendingSpeech = null\n\s*if \(queuedSpeech != null\) \{\n\s*mainHandler\.post \{ speak\(queuedSpeech\.first, queuedSpeech\.second, queuedSpeech\.third\) \}\n\s*\}){2,}',
+                     lambda m: m.group(1), s)
+          p.write_text(s)
+
+          p = Path("app/src/main/java/com/myra/assistant/offline/OfflineCommandEngine.kt")
+          s = p.read_text()
+          s = s.replace("appLauncher.launchAppByName(appName).success.success",
+                        "appLauncher.launchAppByName(appName)")
+          s = s.replace("appLauncher.launchAppByName(appName).success",
+                        "appLauncher.launchAppByName(appName)")
+          p.write_text(s)
+
+          print("Repeated patch declarations normalized.")
+          PY
       - name: Upload patched MYRA source snapshot
         uses: actions/upload-artifact@v4
         with:
