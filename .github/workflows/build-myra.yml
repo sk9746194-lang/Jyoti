@@ -431,7 +431,7 @@ jobs:
                         }
                     }
 
-'''
+          '''
           if "Gemma License / Hugging Face Access" not in s:
               if card_anchor not in s:
                   raise SystemExit("SettingsScreen download card anchor missing")
