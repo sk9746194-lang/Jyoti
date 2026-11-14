@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-main:
@@ -451,6 +451,21 @@ jobs:
       - name: Build main app
         working-directory: MYRA_SOURCE
         run: ./gradlew :app:clean :app:assembleDebug --no-daemon --stacktrace
+      - name: Update GitHub source ZIP with patched MYRA source
+        if: success()
+        run: |
+          cd MYRA_SOURCE
+          zip -qr ../MYRA_EXTRACTED_SOURCE.zip .
+          cd ..
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MYRA_EXTRACTED_SOURCE.zip
+          if git diff --cached --quiet; then
+            echo "Source ZIP already contains the validated fixes."
+          else
+            git commit -m "Update MYRA source ZIP with validated fixes"
+            git push origin HEAD:main
+          fi
       - name: Upload main APK and reports
         if: always()
         uses: actions/upload-artifact@v4
