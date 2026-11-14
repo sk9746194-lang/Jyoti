@@ -454,9 +454,30 @@ jobs:
       - name: Update GitHub source ZIP with patched MYRA source
         if: success()
         run: |
-          cd MYRA_SOURCE
-          zip -qr ../MYRA_EXTRACTED_SOURCE.zip .
-          cd ..
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+
+          root = Path("MYRA_SOURCE")
+          output = Path("MYRA_EXTRACTED_SOURCE.zip")
+          excluded_dirs = {".git", ".gradle", ".idea", "build", "node_modules", "dist", ".cache"}
+          excluded_suffixes = {".apk", ".aab", ".class", ".log", ".jks", ".keystore", ".p12", ".pem"}
+          with ZipFile(output, "w", ZIP_DEFLATED, compresslevel=9) as archive:
+              for path in root.rglob("*"):
+                  relative = path.relative_to(root)
+                  if any(part in excluded_dirs for part in relative.parts):
+                      continue
+                  if not path.is_file() or path.name == "local.properties":
+                      continue
+                  if path.suffix.lower() in excluded_suffixes or path.name == ".env":
+                      continue
+                  archive.write(path, relative.as_posix())
+          with ZipFile(output) as archive:
+              bad = archive.testzip()
+              if bad:
+                  raise SystemExit(f"Repacked ZIP failed CRC validation: {bad}")
+              print(f"Repacked {len(archive.namelist())} source files ({output.stat().st_size} bytes).")
+          PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add MYRA_EXTRACTED_SOURCE.zip
