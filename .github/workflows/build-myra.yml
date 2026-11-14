@@ -310,91 +310,55 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          # 1) The official repository requires accepting Gemma terms and authenticated file access.
+          # 1) Use the exact LiteRT-LM artifact and require the user's own HF read token.
           p = Path("app/src/main/java/com/myra/assistant/offline/OfflineModeManager.kt")
           s = p.read_text()
           s = s.replace('fileName = "Gemma3-1B-IT.litertlm",',
                         'fileName = "Gemma3-1B-IT_multi-prefill-seq_q4_ekv4096.litertlm",')
           s = s.replace('expectedSizeBytes = 688_157_792L, // 656.28 MB exact',
-                        'expectedSizeBytes = 584_417_280L, // Official 584 MB Q4 LiteRT-LM artifact')
+                        'expectedSizeBytes = 584_417_280L, // Official Q4 LiteRT-LM artifact')
           s = s.replace('expectedSha256 = "62faebcfd101acb841c33249530430397e031eb17d4dd3d2a71193d135705f27",',
                         'expectedSha256 = "1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be",')
-          s = s.replace('''        // Wi-Fi check
-        if (isWifiOnlyDownload()''',
-                        '''        // Gemma files are gated on Hugging Face. User must accept the Gemma terms
-        // and provide their own read token; never embed a shared token in the APK.
-        if (secureStorage.getHuggingFaceToken().isBlank()) {
-            _downloadStatus.value = ModelDownloadStatus.FAILED
-            _statusMessage.value = "Hugging Face token आवश्यक है। पहले Gemma license स्वीकार करें और अपना Read token सुरक्षित रूप से यहाँ सेव करें।"
-            return
-        }
-
-        // Wi-Fi check
-        if (isWifiOnlyDownload()''', 1)
-          s = s.replace('''        val url = URL(targetModel.downloadUrl)
-        var connection: HttpURLConnection? = null''',
-                        '''        val url = URL(targetModel.downloadUrl)
-        val hfToken = secureStorage.getHuggingFaceToken()
-        var connection: HttpURLConnection? = null''', 1)
-          s = s.replace('''                setRequestProperty("User-Agent", "MYRA-Assistant-Android/1.0 (Moto g34 5G)")
-                if (existingBytes > 0)''',
-                        '''                setRequestProperty("User-Agent", "MYRA-Assistant-Android/1.0")
-                setRequestProperty("Authorization", "Bearer $hfToken")
-                if (existingBytes > 0)''', 1)
-          s = s.replace('''            if (!isOk && !isPartial) {
-                val errorMsg = "HTTP Error $responseCode: ${connection.responseMessage}"''',
-                        '''            if (responseCode == 401 || responseCode == 403) {
-                _downloadStatus.value = ModelDownloadStatus.FAILED
-                _statusMessage.value = "Hugging Face ने access रोका। ब्राउज़र में Gemma license स्वीकार करें और वैध Read token सेव करें।"
-                return@withContext
-            }
-
-            if (!isOk && !isPartial) {
-                val errorMsg = "HTTP Error $responseCode: ${connection.responseMessage}"''', 1)
+          s = s.replace("        // Wi-Fi check\n        if (isWifiOnlyDownload()",
+                        "        // Gemma files are gated on Hugging Face; require a personal read token.\n        if (secureStorage.getHuggingFaceToken().isBlank()) {\n            _downloadStatus.value = ModelDownloadStatus.FAILED\n            _statusMessage.value = \"Hugging Face Read token आवश्यक है। Gemma license स्वीकार करके token सेव करें।\"\n            return\n        }\n\n        // Wi-Fi check\n        if (isWifiOnlyDownload()", 1)
+          s = s.replace("        val url = URL(targetModel.downloadUrl)\n        var connection: HttpURLConnection? = null",
+                        "        val url = URL(targetModel.downloadUrl)\n        val hfToken = secureStorage.getHuggingFaceToken()\n        var connection: HttpURLConnection? = null", 1)
+          s = s.replace('                setRequestProperty("User-Agent", "MYRA-Assistant-Android/1.0 (Moto g34 5G)")\n                if (existingBytes > 0)',
+                        '                setRequestProperty("User-Agent", "MYRA-Assistant-Android/1.0")\n                setRequestProperty("Authorization", "Bearer $hfToken")\n                if (existingBytes > 0)', 1)
+          s = s.replace('            if (!isOk && !isPartial) {\n                val errorMsg = "HTTP Error $responseCode: \${connection.responseMessage}"',
+                        '            if (responseCode == 401 || responseCode == 403) {\n                _downloadStatus.value = ModelDownloadStatus.FAILED\n                _statusMessage.value = "Hugging Face access denied. Accept the Gemma license and save a valid Read token."\n                return@withContext\n            }\n\n            if (!isOk && !isPartial) {\n                val errorMsg = "HTTP Error $responseCode: \${connection.responseMessage}"', 1)
           p.write_text(s)
 
-          # 2) Store the user's Hugging Face token in the same encrypted Android Keystore vault.
+          # 2) Save the personal token using the existing encrypted-preferences vault.
           p = Path("app/src/main/java/com/myra/assistant/security/SecureKeyStorage.kt")
           s = p.read_text()
-          s = s.replace('''        private const val KEY_GEMINI_API_KEY = "encrypted_gemini_api_key"''',
-                        '''        private const val KEY_GEMINI_API_KEY = "encrypted_gemini_api_key"
-        private const val KEY_HUGGING_FACE_TOKEN = "encrypted_hugging_face_read_token"''', 1)
-          anchor = '''    /**
-     * Optional custom server endpoint URL (e.g. user-hosted backend).
-     */'''
-          methods = '''    /** Stores the user's own Hugging Face read token encrypted on this device. */
-    fun saveHuggingFaceToken(token: String) {
-        securePrefs.edit().putString(KEY_HUGGING_FACE_TOKEN, token.trim()).apply()
-    }
-
-    fun getHuggingFaceToken(): String {
-        return securePrefs.getString(KEY_HUGGING_FACE_TOKEN, "")?.trim() ?: ""
-    }
-
-    fun hasHuggingFaceToken(): Boolean = getHuggingFaceToken().isNotBlank()
-
-    fun clearHuggingFaceToken() {
-        securePrefs.edit().remove(KEY_HUGGING_FACE_TOKEN).apply()
-    }
-
-'''
+          s = s.replace('        private const val KEY_GEMINI_API_KEY = "encrypted_gemini_api_key"',
+                        '        private const val KEY_GEMINI_API_KEY = "encrypted_gemini_api_key"\n        private const val KEY_HUGGING_FACE_TOKEN = "encrypted_hugging_face_read_token"', 1)
+          anchor = "    /**\n     * Optional custom server endpoint URL (e.g. user-hosted backend).\n     */"
+          methods = "    /** Stores the user's Hugging Face read token in the secure preferences vault. */\n" + \
+                    "    fun saveHuggingFaceToken(token: String) {\n" + \
+                    "        securePrefs.edit().putString(KEY_HUGGING_FACE_TOKEN, token.trim()).apply()\n" + \
+                    "    }\n\n" + \
+                    "    fun getHuggingFaceToken(): String = securePrefs.getString(KEY_HUGGING_FACE_TOKEN, \"\")?.trim() ?: \"\"\n\n" + \
+                    "    fun hasHuggingFaceToken(): Boolean = getHuggingFaceToken().isNotBlank()\n\n" + \
+                    "    fun clearHuggingFaceToken() {\n        securePrefs.edit().remove(KEY_HUGGING_FACE_TOKEN).apply()\n    }\n\n"
           if "fun saveHuggingFaceToken" not in s:
               if anchor not in s:
                   raise SystemExit("SecureKeyStorage insertion anchor missing")
               s = s.replace(anchor, methods + anchor, 1)
           p.write_text(s)
 
-          # 3) Add an in-app token field; token is entered on the phone, never in chat or source.
+          # 3) Add an on-device token field; never put the token in source or workflow secrets.
           p = Path("app/src/main/java/com/myra/assistant/ui/screens/SettingsScreen.kt")
           s = p.read_text()
           if "import com.myra.assistant.security.SecureKeyStorage" not in s:
               s = s.replace("import com.myra.assistant.provider.LocalModelBenchmarkResult",
                             "import com.myra.assistant.provider.LocalModelBenchmarkResult\nimport com.myra.assistant.security.SecureKeyStorage", 1)
-          state_anchor = '''    val offlineMgr = remember { OfflineModeManager.getInstance(context) }'''
-          state_add = '''    val secureKeyStorage = remember { SecureKeyStorage.getInstance(context) }
-    var hfTokenInput by remember { mutableStateOf("") }
-    val hasHfToken by remember { derivedStateOf { secureKeyStorage.hasHuggingFaceToken() } }
-    val offlineMgr = remember { OfflineModeManager.getInstance(context) }'''
+          state_anchor = "    val offlineMgr = remember { OfflineModeManager.getInstance(context) }"
+          state_add = "    val secureKeyStorage = remember { SecureKeyStorage.getInstance(context) }\n" + \
+                      "    var hfTokenInput by remember { mutableStateOf(\"\") }\n" + \
+                      "    var hasHfToken by remember { mutableStateOf(secureKeyStorage.hasHuggingFaceToken()) }\n" + \
+                      state_anchor
           if "var hfTokenInput by remember" not in s:
               if state_anchor not in s:
                   raise SystemExit("SettingsScreen offline state anchor missing")
@@ -414,8 +378,8 @@ jobs:
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                if (hasHfToken) "Hugging Face Read token इस डिवाइस में सुरक्षित है।"
-                                else "पहले Hugging Face पर Gemma terms स्वीकार करें, फिर अपना Read token नीचे सेव करें।",
+                                if (hasHfToken) "Hugging Face Read token इस डिवाइस में सेव है।"
+                                else "पहले Hugging Face पर Gemma terms स्वीकार करें, फिर अपना Read token सेव करें।",
                                 color = TextSecondary,
                                 fontSize = 10.sp
                             )
@@ -446,8 +410,9 @@ jobs:
                                     onClick = {
                                         if (hfTokenInput.trim().startsWith("hf_")) {
                                             secureKeyStorage.saveHuggingFaceToken(hfTokenInput)
+                                            hasHfToken = secureKeyStorage.hasHuggingFaceToken()
                                             hfTokenInput = ""
-                                            Toast.makeText(context, "Hugging Face token इस डिवाइस में सुरक्षित सेव हुआ", Toast.LENGTH_LONG).show()
+                                            Toast.makeText(context, "Hugging Face token सेव हुआ", Toast.LENGTH_LONG).show()
                                         } else {
                                             Toast.makeText(context, "कृपया सही Hugging Face Read token डालें", Toast.LENGTH_LONG).show()
                                         }
@@ -457,6 +422,7 @@ jobs:
                                 OutlinedButton(
                                     onClick = {
                                         secureKeyStorage.clearHuggingFaceToken()
+                                        hasHfToken = false
                                         hfTokenInput = ""
                                         Toast.makeText(context, "Hugging Face token हटाया गया", Toast.LENGTH_SHORT).show()
                                     }
@@ -471,7 +437,7 @@ jobs:
                   raise SystemExit("SettingsScreen download card anchor missing")
               s = s.replace(card_anchor, card + card_anchor, 1)
           p.write_text(s)
-          print("Gemma gated-download and secure token patches applied.")
+          print("Gemma gated-download and token UI patches applied.")
           PY
       - name: Build main app
         working-directory: MYRA_SOURCE
