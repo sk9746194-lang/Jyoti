@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - ".github/workflows/inspect-myra-zip.yml"
+      - ".github/workflows/build-myra.yml"
 
 permissions:
   contents: read
