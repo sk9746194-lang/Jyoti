@@ -3,13 +3,6 @@ name: Build MYRA APKs
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
-    inputs:
-      build_apk:
-        description: "Build APK only after all source repairs are complete"
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -1322,11 +1315,11 @@ jobs:
             git push origin HEAD:main
           fi
       - name: Build main app
-        if: github.event_name == 'workflow_dispatch' && inputs.build_apk == true
+        if: false
         working-directory: MYRA_SOURCE
         run: ./gradlew :app:clean :app:assembleDebug --no-daemon --stacktrace
       - name: Upload main APK and reports
-        if: always() && github.event_name == 'workflow_dispatch' && inputs.build_apk == true
+        if: always() && false
         uses: actions/upload-artifact@v4
         with:
           name: MYRA-Main-APK-or-Build-Logs
