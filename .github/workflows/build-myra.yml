@@ -701,8 +701,8 @@ jobs:
           if "private var toolCallPending = false" not in s:
               s = s.replace('    private var lastWsUrl: String = ""', '    private var lastWsUrl: String = ""\n    @Volatile private var toolCallPending = false\n    @Volatile private var pendingToolCalls = 0', 1)
           if 'put("tools", GeminiApiClient.getToolsDeclarationJson())' not in s:
-              marker = "                })\\n            })\\n        }\\n        ws.send(setupPayload.toString())"
-              insert = "                })\\n                put(\\"tools\\", GeminiApiClient.getToolsDeclarationJson())\\n                put(\\"inputAudioTranscription\\", JSONObject())\\n                put(\\"outputAudioTranscription\\", JSONObject())\\n            })\\n        }\\n        ws.send(setupPayload.toString())"
+              marker = "                })\n            })\n        }\n        ws.send(setupPayload.toString())"
+              insert = '                })\n                put("tools", GeminiApiClient.getToolsDeclarationJson())\n                put("inputAudioTranscription", JSONObject())\n                put("outputAudioTranscription", JSONObject())\n            })\n        }\n        ws.send(setupPayload.toString())'
               if marker not in s: raise SystemExit("Gemini Live setup closing anchor missing")
               s = s.replace(marker, insert, 1)
 
