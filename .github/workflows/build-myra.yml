@@ -1296,14 +1296,14 @@ jobs:
           # ActionBrain generic branch: explicitly fail unsupported intents.
           p = root / "app/src/main/java/com/myra/assistant/tools/ActionBrain.kt"
           s = p.read_text()
-          generic_pattern = r'(?ms)^                else -> \\{\\n                    ActionResult\\(\\n                        actionId = plan.actionId,\\n                        status = ActionStatus.VERIFIED_SUCCESS,.*?^                \\}'
-          generic_replacement = "\\n".join([
+          generic_pattern = r'(?ms)^                else -> \{\n                    ActionResult\(\n                        actionId = plan.actionId,\n                        status = ActionStatus.VERIFIED_SUCCESS,.*?^                \}'
+          generic_replacement = "\n".join([
               "                else -> {",
               "                    ActionResult(",
               "                        actionId = plan.actionId,",
               "                        status = ActionStatus.FAILED,",
-              "                        messageHindi = \\"${plan.title}: यह एक्शन अभी लागू नहीं है; कोई बदलाव नहीं किया गया।\\",",
-              "                        messageEnglish = \\"${plan.title}: unsupported action; nothing was executed.\\",",
+              "                        messageHindi = \"${plan.title}: यह एक्शन अभी लागू नहीं है; कोई बदलाव नहीं किया गया।\",",
+              "                        messageEnglish = \"${plan.title}: unsupported action; nothing was executed.\",",
               "                        isVerified = false",
               "                    )",
               "                }"
@@ -1316,7 +1316,7 @@ jobs:
           # Gemini function call WhatsApp response must reflect the actual draft result.
           p = root / "app/src/main/java/com/myra/assistant/MainActivity.kt"
           s = p.read_text()
-          s, wa_matches = re.subn(r'whatsAppAutomation\\.handleWhatsAppCommand\\(target, msg, autoSend = false\\) \\{ \\}\\n\\s*CommandResult\\.success\\([^\\n]*\\)', 'whatsAppAutomation.handleWhatsAppCommand(target, msg, autoSend = false) { }', s, count=1)
+          s, wa_matches = re.subn(r'whatsAppAutomation\.handleWhatsAppCommand\(target, msg, autoSend = false\) \{ \}\n\s*CommandResult\.success\([^\n]*\)', 'whatsAppAutomation.handleWhatsAppCommand(target, msg, autoSend = false) { }', s, count=1)
           p.write_text(s)
           # 9) Remove all retiring Gemini 3.6 fallback/model-list references.
           for rel in [
