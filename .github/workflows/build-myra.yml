@@ -799,19 +799,12 @@ jobs:
 
           activity = Path("app/src/main/java/com/myra/assistant/MainActivity.kt")
           s = activity.read_text()
-          old = """                                onStatusChanged = { connected, reason ->
-                                    voiceStatus = voiceStatus.copy(
-                                        fallbackActive = !connected,
-                                        fallbackReason = reason
-                                    )
-                                }
-                            )"""
-          new = """                                onStatusChanged = { connected, reason ->
-                                    voiceStatus = voiceStatus.copy(
-                                        fallbackActive = !connected,
-                                        fallbackReason = reason
-                                    )
-                                },
+          if "onFunctionCall = { functionName, arguments, callId ->" not in s:
+              call = s.find("onStatusChanged = { connected, reason ->")
+              close = s.find("\\n                            )\\n                            val wsUrl =", call)
+              if call < 0 or close < 0:
+                  raise SystemExit("MainActivity Live callback insertion point missing")
+              callback = """,
                                 onFunctionCall = { functionName, arguments, callId ->
                                     lifecycleScope.launch {
                                         try {
@@ -821,13 +814,10 @@ jobs:
                                             liveEngine?.sendFunctionResponse(callId, functionName, false, "Action failed: ${e.message}")
                                         }
                                     }
-                                }
-                            )"""
-          if old in s:
-              s = s.replace(old, new, 1)
-          elif "onFunctionCall = { functionName, arguments, callId ->" not in s:
-              raise SystemExit("MainActivity GeminiLiveVoiceEngine constructor anchor not found")
+                                }"""
+              s = s[:close] + callback + s[close:]
           activity.write_text(s)
+          print("Gemini Live function calling, tool responses, audio gating and GF-mode reconnect patches applied.")
           print("Gemini Live function calling, tool responses, audio gating and GF-mode reconnect patches applied.")
           PY
       - name: Upload patched MYRA source snapshot
