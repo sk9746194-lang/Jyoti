@@ -1117,7 +1117,7 @@ jobs:
           s = p.read_text()
           callBranch = "\n".join([
               "                        CommandIntent.CALL_PHONE -> {",
-              "                            val msg = \\"कॉल करने से पहले फोन अनलॉक करें और MYRA में मालिक की पुष्टि करें। अभी कॉल नहीं की गई।\"",
+              "                            val msg = \"कॉल करने से पहले फोन अनलॉक करें और MYRA में मालिक की पुष्टि करें। अभी कॉल नहीं की गई।\"",
               "                            assistantReply = msg",
               "                            assistantState = AssistantState.SPEAKING",
               "                            speechEngine?.speak(msg)",
@@ -1132,7 +1132,7 @@ jobs:
 
           sosBranch = "\n".join([
               "                        CommandIntent.EMERGENCY_SOS -> {",
-              "                            val msg = \\"SOS शुरू करने से पहले फोन अनलॉक करें और MYRA में पुष्टि करें। लॉक स्क्रीन से कोई कॉल नहीं की गई।\"",
+              "                            val msg = \"SOS शुरू करने से पहले फोन अनलॉक करें और MYRA में पुष्टि करें। लॉक स्क्रीन से कोई कॉल नहीं की गई।\"",
               "                            assistantReply = msg",
               "                            assistantState = AssistantState.SPEAKING",
               "                            speechEngine?.speak(msg)",
