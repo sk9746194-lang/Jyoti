@@ -1308,9 +1308,10 @@ jobs:
               "                    )",
               "                }"
           ])
-          s, generic_matches = re.subn(generic_pattern, generic_replacement, s, count=1)
-          if generic_matches != 1:
-              raise SystemExit("ActionBrain generic success branch not found")
+          if "unsupported action; nothing was executed." not in s:
+              s, generic_matches = re.subn(generic_pattern, generic_replacement, s, count=1)
+              if generic_matches != 1:
+                  raise SystemExit("ActionBrain generic success branch not found")
           p.write_text(s)
 
           # Gemini function call WhatsApp response must reflect the actual draft result.
