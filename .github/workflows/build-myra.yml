@@ -119,7 +119,7 @@ jobs:
 
           # Match the label independent of indentation/formatting. Never claim Live
           # while the app is using the native fallback speech engine.
-          label_pattern = r'text\\s*=\\s*"Live"'
+          label_pattern = r'text\s*=\s*"Live"'
           s, label_count = re.subn(
               label_pattern,
               'text = if (voiceStatus.fallbackActive) "Local" else "Gemini Live"',
