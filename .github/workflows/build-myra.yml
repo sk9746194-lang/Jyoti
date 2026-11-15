@@ -448,6 +448,20 @@ jobs:
           from pathlib import Path
           import re
 
+          # Remove duplicate wake-service action constants left by repeated patch runs.
+          wake = Path("app/src/main/java/com/myra/assistant/services/MyraWakeWordService.kt")
+          if wake.exists():
+              ws = wake.read_text()
+              for declaration in (
+                  '        const val ACTION_PAUSE_LISTENING = "com.myra.assistant.ACTION_PAUSE_WAKE_LISTENING"',
+                  '        const val ACTION_RESUME_LISTENING = "com.myra.assistant.ACTION_RESUME_WAKE_LISTENING"',
+              ):
+                  first = ws.find(declaration)
+                  if first >= 0:
+                      tail = ws[first + len(declaration):].replace("\n" + declaration, "")
+                      ws = ws[:first + len(declaration)] + tail
+              wake.write_text(ws)
+
           # Earlier patch attempts could be applied repeatedly to an already
           # patched ZIP. Collapse duplicate declarations and repeated edits.
           p = Path("app/src/main/java/com/myra/assistant/security/SecureKeyStorage.kt")
