@@ -603,8 +603,7 @@ jobs:
 
           fun resumeWhenAppBackgrounded(context: Context) {
               val intent = Intent(context, MyraWakeWordService::class.java).apply { action = ACTION_RESUME_LISTENING }
-              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
-              else context.startService(intent)
+              context.startService(intent)
           }
 
           fun stop(context: Context) {""",
@@ -617,7 +616,7 @@ jobs:
           if "MyraWakeWordService.pauseForAssistant(this)" not in a:
               a = a.replace(
                   "    override fun onResume() {\n        super.onResume()",
-                  "    override fun onResume() {\n        super.onResume()\n        com.myra.assistant.services.MyraWakeWordService.pauseForAssistant(this)",
+                  "    override fun onResume() {\n        super.onResume()\n        if (com.myra.assistant.data.PreferencesManager(this).isHandsFreeWakeWordEnabled) { com.myra.assistant.services.MyraWakeWordService.pauseForAssistant(this) }",
                   1
               )
           if "override fun onStop()" not in a:
@@ -626,7 +625,7 @@ jobs:
                   """    override fun onStop() {
           super.onStop()
           // The foreground wake service already exists; resume its listener when the UI leaves foreground.
-          com.myra.assistant.services.MyraWakeWordService.resumeWhenAppBackgrounded(this)
+          if (com.myra.assistant.data.PreferencesManager(this).isHandsFreeWakeWordEnabled) { com.myra.assistant.services.MyraWakeWordService.resumeWhenAppBackgrounded(this) }
           }
 
           override fun onNewIntent(intent: Intent) {""",
