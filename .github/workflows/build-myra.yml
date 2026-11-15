@@ -701,19 +701,18 @@ jobs:
           if "private var toolCallPending = false" not in s:
               s = s.replace('    private var lastWsUrl: String = ""', '    private var lastWsUrl: String = ""\n    @Volatile private var toolCallPending = false\n    @Volatile private var pendingToolCalls = 0', 1)
           if 'put("tools", GeminiApiClient.getToolsDeclarationJson())' not in s:
-              old = """                put("systemInstruction", JSONObject().apply {
-                      put("parts", JSONArray().apply {
-                          put(JSONObject().apply {
-                              put("text", systemPromptText)
-                          })
+              marker = """                })
                       })
-                  })"""
-              new = old + """
-                  put("tools", GeminiApiClient.getToolsDeclarationJson())
-                  put("inputAudioTranscription", JSONObject())
-                  put("outputAudioTranscription", JSONObject())"""
-              if old not in s: raise SystemExit("Gemini Live setup systemInstruction anchor missing")
-              s = s.replace(old, new, 1)
+                  })
+                  ws.send(setupPayload.toString())"""
+              insert = """                })
+                      put("tools", GeminiApiClient.getToolsDeclarationJson())
+                      put("inputAudioTranscription", JSONObject())
+                      put("outputAudioTranscription", JSONObject())
+                  })
+                  ws.send(setupPayload.toString())"""
+              if marker not in s: raise SystemExit("Gemini Live setup closing anchor missing")
+              s = s.replace(marker, insert, 1)
 
           start = s.find("    fun updatePersonality(newPersonality: String) {")
           end = s.find("\n    /**", start)
