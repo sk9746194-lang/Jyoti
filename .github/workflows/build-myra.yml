@@ -663,7 +663,181 @@ jobs:
               1
           )
           activity.write_text(a)
+          # Normalize wake constants after the preceding patch has had a chance to reinsert them.
+          wake = Path("app/src/main/java/com/myra/assistant/services/MyraWakeWordService.kt")
+          ws = wake.read_text()
+          seen_names = set()
+          normalized = []
+          for line in ws.splitlines():
+              stripped = line.strip()
+              if stripped.startswith("const val ACTION_PAUSE_LISTENING =") or stripped.startswith("const val ACTION_RESUME_LISTENING ="):
+                  key = stripped.split("=", 1)[0].strip()
+                  if key in seen_names:
+                      continue
+                  seen_names.add(key)
+              normalized.append(line)
+          wake.write_text("\n".join(normalized) + "\n")
           print("Wake-word microphone ownership and lifecycle safeguards applied.")
+          PY
+      - name: Add real Gemini Live tools and correct GF mode updates
+        working-directory: MYRA_SOURCE
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          engine = Path("app/src/main/java/com/myra/assistant/voice/GeminiLiveVoiceEngine.kt")
+          s = engine.read_text()
+          if "import com.myra.assistant.data.GeminiApiClient" not in s:
+              s = s.replace("import android.util.Log", "import android.util.Log\\nimport com.myra.assistant.data.GeminiApiClient", 1)
+          old_ctor = """    private val onSpeakingStateChanged: (Boolean) -> Unit,
+              private val onStatusChanged: (Boolean, String?) -> Unit
+              ) {"""
+          new_ctor = """    private val onSpeakingStateChanged: (Boolean) -> Unit,
+              private val onStatusChanged: (Boolean, String?) -> Unit,
+              private val onFunctionCall: (String, Map<String, Any?>, String) -> Unit = { _, _, _ -> }
+              ) {"""
+          if old_ctor in s:
+              s = s.replace(old_ctor, new_ctor, 1)
+          if "private var toolCallPending = false" not in s:
+              s = s.replace('    private var lastWsUrl: String = ""', '    private var lastWsUrl: String = ""\\n    @Volatile private var toolCallPending = false\\n    @Volatile private var pendingToolCalls = 0', 1)
+          if 'put("tools", GeminiApiClient.getToolsDeclarationJson())' not in s:
+              old = """                put("systemInstruction", JSONObject().apply {
+                      put("parts", JSONArray().apply {
+                          put(JSONObject().apply {
+                              put("text", systemPromptText)
+                          })
+                      })
+                  })"""
+              new = old + """
+                  put("tools", GeminiApiClient.getToolsDeclarationJson())
+                  put("inputAudioTranscription", JSONObject())
+                  put("outputAudioTranscription", JSONObject())"""
+              if old not in s: raise SystemExit("Gemini Live setup systemInstruction anchor missing")
+              s = s.replace(old, new, 1)
+
+          start = s.find("    fun updatePersonality(newPersonality: String) {")
+          end = s.find("\n    /**", start)
+          if start < 0 or end < 0: raise SystemExit("Could not locate updatePersonality method")
+          replacement = """    fun updatePersonality(newPersonality: String) {
+                  currentPersonality = newPersonality
+                  Log.i(tag, "Live voice personality changed; reconnecting with a fresh system instruction: $newPersonality")
+                  if (isGoogleBidiEndpoint && lastWsUrl.isNotBlank()) {
+                      val oldSocket = webSocket
+                      isIntentionalDisconnect = true
+                      webSocket = null
+                      try { oldSocket?.close(1000, "Refreshing MYRA personality") } catch (_: Exception) {}
+                      connect(lastWsUrl, LIVE_MODEL, currentVoiceName, currentPersonality, currentCompanionNickname)
+                  } else {
+                      val payload = JsonObject().apply {
+                          addProperty("type", "update_personality")
+                          addProperty("personality", newPersonality)
+                          addProperty("voiceName", currentVoiceName)
+                          addProperty("nickname", currentCompanionNickname)
+                      }
+                      webSocket?.send(payload.toString())
+                  }
+              }
+          """
+          s = s[:start] + replacement + s[end:]
+
+          if 'if (root.has("toolCall"))' not in s:
+              old = '        if (root.has("serverContent")) {'
+              if old not in s: raise SystemExit("Live parser serverContent anchor missing")
+              s = s.replace(old, '        if (root.has("toolCall")) {\\n            handleGoogleToolCall(root.getJSONObject("toolCall"))\\n            return\\n        }\\n\\n' + old, 1)
+
+          if "private fun handleGoogleToolCall(" not in s:
+              marker = "    private fun calculatePcmRms(pcmBytes: ByteArray) {"
+              methods = """    private fun handleGoogleToolCall(toolCall: JSONObject) {
+                  val calls = toolCall.optJSONArray("functionCalls") ?: return
+                  pendingToolCalls = calls.length()
+                  toolCallPending = pendingToolCalls > 0
+                  for (i in 0 until calls.length()) {
+                      val call = calls.optJSONObject(i) ?: continue
+                      val callId = call.optString("id")
+                      val name = call.optString("name")
+                      val argsJson = call.optJSONObject("args") ?: JSONObject()
+                      val args = mutableMapOf<String, Any?>()
+                      val keys = argsJson.keys()
+                      while (keys.hasNext()) {
+                          val key = keys.next()
+                          val value = argsJson.opt(key)
+                          args[key] = if (value == JSONObject.NULL) null else value
+                      }
+                      if (callId.isBlank() || name.isBlank()) {
+                          sendFunctionResponse(callId, name, false, "Invalid Gemini function call.", "")
+                      } else {
+                          try { onFunctionCall(name, args, callId) }
+                          catch (e: Exception) { sendFunctionResponse(callId, name, false, "Action failed: ${e.message}", "") }
+                      }
+                  }
+                  if (calls.length() == 0) toolCallPending = false
+              }
+
+              fun sendFunctionResponse(id: String, name: String, success: Boolean, message: String, detail: String = "") {
+                  if (!isGoogleBidiEndpoint || webSocket == null) return
+                  val response = JSONObject().apply {
+                      put("success", success)
+                      put("message", message)
+                      if (detail.isNotBlank()) put("detail", detail)
+                  }
+                  val payload = JSONObject().apply {
+                      put("toolResponse", JSONObject().apply {
+                          put("functionResponses", JSONArray().apply {
+                              put(JSONObject().apply {
+                                  put("id", id)
+                                  put("name", name)
+                                  put("response", response)
+                              })
+                          })
+                      })
+                  }
+                  val sent = webSocket?.send(payload.toString()) == true
+                  if (!sent) Log.e(tag, "Failed to send Gemini Live tool response for $name")
+                  synchronized(this) {
+                      pendingToolCalls = (pendingToolCalls - 1).coerceAtLeast(0)
+                      if (pendingToolCalls == 0) toolCallPending = false
+                  }
+              }
+
+          """
+              if marker not in s: raise SystemExit("Live engine insertion marker missing")
+              s = s.replace(marker, methods + marker, 1)
+          if "if (toolCallPending) return" not in s:
+              s = s.replace("    fun sendAudioChunk(pcmChunk: ByteArray) {", "    fun sendAudioChunk(pcmChunk: ByteArray) {\\n        if (toolCallPending) return", 1)
+          engine.write_text(s)
+
+          activity = Path("app/src/main/java/com/myra/assistant/MainActivity.kt")
+          s = activity.read_text()
+          old = """                                onStatusChanged = { connected, reason ->
+                                          voiceStatus = voiceStatus.copy(
+                                              fallbackActive = !connected,
+                                              fallbackReason = reason
+                                          )
+                                      }
+                                  )"""
+          new = """                                onStatusChanged = { connected, reason ->
+                                          voiceStatus = voiceStatus.copy(
+                                              fallbackActive = !connected,
+                                              fallbackReason = reason
+                                          )
+                                      },
+                                      onFunctionCall = { functionName, arguments, callId ->
+                                          lifecycleScope.launch {
+                                              try {
+                                                  val outcome = executeFunctionCallOnAndroid(functionName, arguments)
+                                                  liveEngine?.sendFunctionResponse(callId, functionName, outcome.success, outcome.message, outcome.detail)
+                                              } catch (e: Exception) {
+                                                  liveEngine?.sendFunctionResponse(callId, functionName, false, "Action failed: ${e.message}")
+                                              }
+                                          }
+                                      }
+                                  )"""
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif "onFunctionCall = { functionName, arguments, callId ->" not in s:
+              raise SystemExit("MainActivity GeminiLiveVoiceEngine constructor anchor not found")
+          activity.write_text(s)
+          print("Gemini Live function calling, tool responses, audio gating and GF-mode reconnect patches applied.")
           PY
       - name: Upload patched MYRA source snapshot
         uses: actions/upload-artifact@v4
