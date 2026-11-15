@@ -1421,6 +1421,38 @@ jobs:
           print("Added bounded socket reads, 1 MB request cap and 50 MB transfer limits.")
           print("Added paired-token checks for LAN gesture/file/screen routes, locked Companion command auth, draft-only WhatsApp in ActionBrain, honest unsupported-action results, and removed retiring model fallback.")
 
+          # MYRA is BYOK direct-to-Google: never route normal chat through a custom backend.
+          p = root / "app/src/main/java/com/myra/assistant/provider/AIProviderManager.kt"
+          s = p.read_text()
+          s = s.replace("    private val optionalBackendProvider = OptionalSecureBackendProvider(context)\n", "")
+          backend_pattern = r'        // Step 1: Optional Custom Backend \(if user configured private server\).*?        // Step 2: Gemini Direct Provider \(Official Google API\)'
+          direct_only = "        // Direct Google Gemini API only — no custom backend or separate backend login is required.\n        // Step 1: Gemini Direct Provider (Official Google API)"
+          s, backend_matches = re.subn(backend_pattern, direct_only, s, count=1, flags=re.S)
+          if backend_matches != 1 and "no custom backend or separate backend login is required" not in s:
+              raise SystemExit("Optional backend routing block was not found; refusing to leave ambiguous routing.")
+          if "optionalBackendProvider.executeChat" in s:
+              raise SystemExit("Custom backend call remains in AIProviderManager.")
+          p.write_text(s)
+
+          # Explain the actual setup directly in Settings: paste the user's own key, no server setup.
+          p = root / "app/src/main/java/com/myra/assistant/ui/screens/SettingsScreen.kt"
+          s = p.read_text()
+          old_notice = "Keys saved here are stored privately on this device and never exposed in APK or Git commits. For multi-user production apps, routing via a secure backend proxy (/api/gemini/*) is recommended to prevent client-side key reverse-engineering."
+          new_notice = "MYRA सीधे Google Gemini API से जुड़ता है। आपको Render, VPS, Backend URL या अलग Backend Login की जरूरत नहीं है। अपनी Gemini API Key यहां Save और Test करें। Key फोन में encrypted storage में रखी जाती है; फोन सुरक्षित रखें और Key किसी से साझा न करें।"
+          if old_notice in s:
+              s = s.replace(old_notice, new_notice, 1)
+          elif new_notice not in s:
+              raise SystemExit("Settings API security notice not found.")
+          p.write_text(s)
+
+          # Keep the setup guide aligned with the direct-key-only app flow.
+          p = root / "GEMINI_API_SETUP.md"
+          if p.exists():
+              s = p.read_text()
+              if "Backend login is not required" not in s:
+                  s += "\n\n## Current MYRA setup — direct API key only\n\nBackend login is not required. MYRA Android sends requests directly to the official Google Gemini API using the key you save in Settings > API Configuration. Do not deploy or configure the optional server for normal MYRA chat or voice use. The API key is encrypted at rest on the phone, but any key used by a client app can potentially be extracted from a compromised device; keep it private and set usage limits/restrictions in Google AI Studio/Cloud where available.\n"
+              p.write_text(s)
+
           print("Applied secure key migration, fail-closed sensitive action checks, honest SOS results, lock-screen blocking, fake-data removal, API throttling, Live endpoint and model fallback updates, and microphone ownership safeguard.")
           PY
 
