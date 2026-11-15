@@ -28,6 +28,88 @@ jobs:
         run: |
           unzip -q MYRA_EXTRACTED_SOURCE.zip -d MYRA_SOURCE
           chmod +x MYRA_SOURCE/gradlew
+      - name: Add Vision AI and Automations shortcuts inside Chat
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("MYRA_SOURCE/app/src/main/java/com/myra/assistant")
+          chat = root / "ui/screens/ChatScreen.kt"
+          s = chat.read_text()
+          old_sig = "    onToggleContinuousVoice: () -> Unit = {},\n    onNavigateBack: () -> Unit = {}\n)"
+          new_sig = "    onToggleContinuousVoice: () -> Unit = {},\n    onOpenVision: () -> Unit = {},\n    onOpenAutomation: () -> Unit = {},\n    onNavigateBack: () -> Unit = {}\n)"
+          if "onOpenVision: () -> Unit" not in s:
+              if old_sig not in s:
+                  raise SystemExit("ChatScreen callback signature anchor missing")
+              s = s.replace(old_sig, new_sig, 1)
+
+          marker = """        // -------------------------------------------------------------
+          // 2. MESSAGES LIST OR EMPTY STATE
+          // -------------------------------------------------------------"""
+          shortcuts = """        // Quick access: these tools are usable from Chat without leaving MYRA.
+                  Row(
+                      modifier = Modifier
+                          .fillMaxWidth()
+                          .padding(horizontal = 12.dp, vertical = 8.dp),
+                      horizontalArrangement = Arrangement.spacedBy(10.dp)
+                  ) {
+                      Surface(
+                          color = Color(0xFF102536),
+                          shape = RoundedCornerShape(12.dp),
+                          border = BorderStroke(1.dp, CyanNeon.copy(alpha = 0.55f)),
+                          modifier = Modifier.weight(1f).clickable { onOpenVision() }
+                      ) {
+                          Row(
+                              modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                              verticalAlignment = Alignment.CenterVertically,
+                              horizontalArrangement = Arrangement.Center
+                          ) {
+                              Icon(Icons.Default.Visibility, contentDescription = null, tint = CyanNeon, modifier = Modifier.size(18.dp))
+                              Spacer(modifier = Modifier.width(7.dp))
+                              Text("Vision AI", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                          }
+                      }
+                      Surface(
+                          color = Color(0xFF1B1935),
+                          shape = RoundedCornerShape(12.dp),
+                          border = BorderStroke(1.dp, PurpleNeon.copy(alpha = 0.55f)),
+                          modifier = Modifier.weight(1f).clickable { onOpenAutomation() }
+                      ) {
+                          Row(
+                              modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                              verticalAlignment = Alignment.CenterVertically,
+                              horizontalArrangement = Arrangement.Center
+                          ) {
+                              Icon(Icons.Default.AutoMode, contentDescription = null, tint = PurpleNeon, modifier = Modifier.size(18.dp))
+                              Spacer(modifier = Modifier.width(7.dp))
+                              Text("Automations", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                          }
+                      }
+                  }
+
+        // -------------------------------------------------------------
+          // 2. MESSAGES LIST OR EMPTY STATE
+          // -------------------------------------------------------------"""
+          if "Quick access: these tools are usable from Chat" not in s:
+              if marker not in s:
+                  raise SystemExit("ChatScreen message-list insertion anchor missing")
+              s = s.replace(marker, shortcuts, 1)
+          chat.write_text(s)
+
+          main = root / "MainActivity.kt"
+          s = main.read_text()
+          old = "                                    onNavigateBack = { currentTab = 0 }\n                                )"
+          new = """                                    onOpenVision = { showVisionScreen = true },
+                                      onOpenAutomation = { showAutomationScreen = true },
+                                      onNavigateBack = { currentTab = 0 }
+                                  )"""
+          if "onOpenVision = { showVisionScreen = true }" not in s:
+              if old not in s:
+                  raise SystemExit("MainActivity ChatScreen callback insertion anchor missing")
+              s = s.replace(old, new, 1)
+          main.write_text(s)
+          print("Chat quick actions wired to existing Vision AI and Automation screens.")
+          PY
       - name: Align dependencies and repair MYRA source
         run: |
           python3 - <<'PY'
