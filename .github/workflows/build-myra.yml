@@ -971,8 +971,13 @@ jobs:
           activity = Path("app/src/main/java/com/myra/assistant/MainActivity.kt")
           s = activity.read_text()
           pause_call = "            com.myra.assistant.services.MyraWakeWordService.pauseForAssistant(this)"
-          s = re.sub(r"(?:^" + re.escape(pause_call) + r"\\n){2,}", pause_call + "\\n", s, flags=re.MULTILINE)
-          activity.write_text(s)
+          lines = s.splitlines()
+          cleaned = []
+          for line in lines:
+              if line.strip() == pause_call.strip() and cleaned and cleaned[-1].strip() == pause_call.strip():
+                  continue
+              cleaned.append(line)
+          activity.write_text("\n".join(cleaned) + "\n")
 
           wake = Path("app/src/main/java/com/myra/assistant/services/MyraWakeWordService.kt")
           s = wake.read_text()
