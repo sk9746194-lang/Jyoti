@@ -1115,9 +1115,9 @@ jobs:
           # 3) Lock-screen overlay must not initiate calls/SOS without unlocking and owner confirmation.
           p = root / "app/src/main/java/com/myra/assistant/ui/LockScreenOverlayActivity.kt"
           s = p.read_text()
-          callBranch = "\\n".join([
+          callBranch = "\n".join([
               "                        CommandIntent.CALL_PHONE -> {",
-              "                            val msg = \\\"कॉल करने से पहले फोन अनलॉक करें और MYRA में मालिक की पुष्टि करें। अभी कॉल नहीं की गई।\\"",
+              "                            val msg = \\"कॉल करने से पहले फोन अनलॉक करें और MYRA में मालिक की पुष्टि करें। अभी कॉल नहीं की गई।\"",
               "                            assistantReply = msg",
               "                            assistantState = AssistantState.SPEAKING",
               "                            speechEngine?.speak(msg)",
@@ -1126,13 +1126,13 @@ jobs:
           callStart = s.find("                        CommandIntent.CALL_PHONE -> {")
           callEnd = s.find("                        CommandIntent.EMERGENCY_SOS -> {", callStart)
           if callStart >= 0 and callEnd > callStart:
-              s = s[:callStart] + callBranch + "\\n" + s[callEnd:]
+              s = s[:callStart] + callBranch + "\n" + s[callEnd:]
           else:
               raise SystemExit("Lock-screen call branch not found")
 
-          sosBranch = "\\n".join([
+          sosBranch = "\n".join([
               "                        CommandIntent.EMERGENCY_SOS -> {",
-              "                            val msg = \\\"SOS शुरू करने से पहले फोन अनलॉक करें और MYRA में पुष्टि करें। लॉक स्क्रीन से कोई कॉल नहीं की गई।\\"",
+              "                            val msg = \\"SOS शुरू करने से पहले फोन अनलॉक करें और MYRA में पुष्टि करें। लॉक स्क्रीन से कोई कॉल नहीं की गई।\"",
               "                            assistantReply = msg",
               "                            assistantState = AssistantState.SPEAKING",
               "                            speechEngine?.speak(msg)",
@@ -1293,6 +1293,31 @@ jobs:
                   }''')
           p.write_text(s)
 
+          # ActionBrain generic branch: explicitly fail unsupported intents.
+          p = root / "app/src/main/java/com/myra/assistant/tools/ActionBrain.kt"
+          s = p.read_text()
+          generic_pattern = r'(?ms)^                else -> \\{\\n                    ActionResult\\(\\n                        actionId = plan.actionId,\\n                        status = ActionStatus.VERIFIED_SUCCESS,.*?^                \\}'
+          generic_replacement = "\\n".join([
+              "                else -> {",
+              "                    ActionResult(",
+              "                        actionId = plan.actionId,",
+              "                        status = ActionStatus.FAILED,",
+              "                        messageHindi = \\"${plan.title}: यह एक्शन अभी लागू नहीं है; कोई बदलाव नहीं किया गया।\\",",
+              "                        messageEnglish = \\"${plan.title}: unsupported action; nothing was executed.\\",",
+              "                        isVerified = false",
+              "                    )",
+              "                }"
+          ])
+          s, generic_matches = re.subn(generic_pattern, generic_replacement, s, count=1)
+          if generic_matches != 1:
+              raise SystemExit("ActionBrain generic success branch not found")
+          p.write_text(s)
+
+          # Gemini function call WhatsApp response must reflect the actual draft result.
+          p = root / "app/src/main/java/com/myra/assistant/MainActivity.kt"
+          s = p.read_text()
+          s, wa_matches = re.subn(r'whatsAppAutomation\\.handleWhatsAppCommand\\(target, msg, autoSend = false\\) \\{ \\}\\n\\s*CommandResult\\.success\\([^\\n]*\\)', 'whatsAppAutomation.handleWhatsAppCommand(target, msg, autoSend = false) { }', s, count=1)
+          p.write_text(s)
           # 9) Remove all retiring Gemini 3.6 fallback/model-list references.
           for rel in [
               "app/src/main/java/com/myra/assistant/data/GeminiApiClient.kt",
