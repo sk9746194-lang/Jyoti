@@ -1508,11 +1508,11 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
       - name: Build main app
-        if: false
+        if: success()
         working-directory: MYRA_SOURCE
         run: ./gradlew :app:clean :app:assembleDebug --no-daemon --stacktrace
       - name: Upload main APK and reports
-        if: always() && false
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: MYRA-Main-APK-or-Build-Logs
