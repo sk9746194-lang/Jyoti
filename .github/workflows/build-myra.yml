@@ -1353,7 +1353,6 @@ jobs:
           # Add socket timeouts and bounded request/file sizes to both LAN servers.
           p = root / "app/src/main/java/com/myra/assistant/connect/ConnectionTransport.kt"
           s = p.read_text()
-          if "s.soTimeout = 5000" not in s:
           if "Request body too large" not in s:
               anchor = "                // Read Request Body\n                val body = if (contentLength > 0) {"
               guard = "\n".join([
@@ -1386,7 +1385,6 @@ jobs:
 
           p = root / "MYRA_Companion_Project/app/src/main/java/com/myra/companion/service/CompanionHotspotServer.kt"
           s = p.read_text()
-          if "s.soTimeout = 5000" not in s:
           if "Request body too large" not in s:
               anchor = "                val body = if (contentLength > 0) {"
               guard = "\n".join([
