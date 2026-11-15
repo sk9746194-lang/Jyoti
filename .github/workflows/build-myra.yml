@@ -1012,49 +1012,12 @@ jobs:
           if "import com.myra.assistant.security.SecureKeyStorage" not in s:
               s = s.replace("import com.myra.assistant.ui.orb.*", "import com.myra.assistant.ui.orb.*\nimport com.myra.assistant.security.SecureKeyStorage")
           s = s.replace("class PreferencesManager(context: Context) {\n    private val prefs", "class PreferencesManager(context: Context) {\n    private val appContext = context.applicationContext\n    private val secureKeys by lazy { SecureKeyStorage.getInstance(appContext) }\n    private val prefs")
-          old = '''    var geminiApiKey: String
-          get() = prefs.getString("user_gemini_api_key", "") ?: ""
-          set(value) = prefs.edit().putString("user_gemini_api_key", value.trim()).apply()
-
-          val hasConfiguredApiKey: Boolean
-          get() = geminiApiKey.isNotBlank()'''
-          new = '''    var geminiApiKey: String
-          get() {
-              val secureValue = secureKeys.getGeminiApiKey()
-              if (secureValue.isNotBlank()) return secureValue
-              val legacyValue = prefs.getString("user_gemini_api_key", "") ?: ""
-              if (legacyValue.isNotBlank()) {
-                  secureKeys.saveGeminiApiKey(legacyValue)
-                  prefs.edit().remove("user_gemini_api_key").apply()
-                  return secureKeys.getGeminiApiKey()
-              }
-              return ""
-          }
-          set(value) {
-              secureKeys.saveGeminiApiKey(value)
-              prefs.edit().remove("user_gemini_api_key").apply()
-          }
-
-          val hasConfiguredApiKey: Boolean
-          get() = geminiApiKey.isNotBlank()'''
-          if old in s:
-              s = s.replace(old, new, 1)
-          elif "secureKeys.getGeminiApiKey()" not in s:
+          pattern = r'    var geminiApiKey: String\\n.*?    val hasConfiguredApiKey: Boolean\\n        get\\(\\) = geminiApiKey\\.isNotBlank\\(\\)'
+          replacement = "    var geminiApiKey: String\\n        get() {\\n            val secureValue = secureKeys.getGeminiApiKey()\\n            if (secureValue.isNotBlank()) return secureValue\\n            val legacyValue = prefs.getString(\\\"user_gemini_api_key\\\", \\\"\\\") ?: \\\"\\\"\\n            if (legacyValue.isNotBlank()) {\\n                secureKeys.saveGeminiApiKey(legacyValue)\\n                prefs.edit().remove(\\\"user_gemini_api_key\\\").apply()\\n                return secureKeys.getGeminiApiKey()\\n            }\\n            return \\\"\\\"\\n        }\\n        set(value) {\\n            secureKeys.saveGeminiApiKey(value)\\n            prefs.edit().remove(\\\"user_gemini_api_key\\\").apply()\\n        }\\n\\n    val hasConfiguredApiKey: Boolean\\n        get() = geminiApiKey.isNotBlank()"
+          s, key_matches = re.subn(pattern, replacement, s, count=1, flags=re.S)
+          if key_matches != 1 and "secureKeys.getGeminiApiKey()" not in s:
               raise SystemExit("PreferencesManager Gemini key block not found")
-          old_clear = '''    fun clearGeminiApiKey() {
-          prefs.edit()
-              .remove("user_gemini_api_key")
-              .putString("gemini_api_status", "Not Configured")
-              .apply()
-          }'''
-          new_clear = '''    fun clearGeminiApiKey() {
-          secureKeys.clearGeminiApiKey()
-          prefs.edit()
-              .remove("user_gemini_api_key")
-              .putString("gemini_api_status", "Not Configured")
-              .apply()
-          }'''
-          s = s.replace(old_clear, new_clear, 1)
+          s = re.sub(r'    fun clearGeminiApiKey\\(\\) \\{.*?^    \\}', "    fun clearGeminiApiKey() {\\n        secureKeys.clearGeminiApiKey()\\n        prefs.edit()\\n            .remove(\\\"user_gemini_api_key\\\")\\n            .putString(\\\"gemini_api_status\\\", \\"Not Configured\\")\\n            .apply()\\n    }", s, count=1, flags=re.S|re.M)
           p.write_text(s)
 
           # 2) Sensitive local commands fail closed unless owner protection is enabled.
