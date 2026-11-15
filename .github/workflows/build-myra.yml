@@ -490,6 +490,156 @@ jobs:
 
           print("Repeated patch declarations normalized.")
           PY
+      - name: Prevent microphone conflicts and stabilize wake service
+        working-directory: MYRA_SOURCE
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          service = Path("app/src/main/java/com/myra/assistant/services/MyraWakeWordService.kt")
+          s = service.read_text()
+
+          if "private var listeningPaused = false" not in s:
+              s = s.replace(
+                  "    private var isDestroyed = false",
+                  "    private var isDestroyed = false\n    private var listeningPaused = false\n    private var wakeWordTriggered = false",
+                  1
+              )
+
+          if "ACTION_PAUSE_LISTENING" not in s:
+              s = s.replace(
+                  "        if (intent?.action == ACTION_STOP_SERVICE) {\n            stopSelf()\n            return START_NOT_STICKY\n        }",
+                  "        if (intent?.action == ACTION_STOP_SERVICE) {\n            stopSelf()\n            return START_NOT_STICKY\n        }",
+                  1
+              )
+              marker = "        initAndStartListening()\n        return START_STICKY"
+              replacement = """        when (intent?.action) {
+              ACTION_PAUSE_LISTENING -> {
+                  pauseListeningForAssistant()
+                  return START_STICKY
+              }
+              ACTION_RESUME_LISTENING -> {
+                  listeningPaused = false
+                  wakeWordTriggered = false
+                  initAndStartListening()
+                  return START_STICKY
+              }
+          }
+
+          initAndStartListening()
+          return START_STICKY"""
+              if marker not in s:
+                  raise SystemExit("Wake service start marker not found")
+              s = s.replace(marker, replacement, 1)
+
+          s = s.replace(
+              "        if (isDestroyed) return\n        val prefs = PreferencesManager(this)",
+              "        if (isDestroyed || listeningPaused || wakeWordTriggered) return\n        val prefs = PreferencesManager(this)",
+              1
+          )
+          s = s.replace(
+              "        if (!isDestroyed) {\n            handler.postDelayed(restartRunnable, delayMs)\n        }",
+              "        if (!isDestroyed && !listeningPaused && !wakeWordTriggered) {\n            handler.postDelayed(restartRunnable, delayMs.coerceAtLeast(900L))\n        }",
+              1
+          )
+          s = s.replace(
+              "            isListening = false\n            // SpeechRecognizer errors like NO_MATCH or SPEECH_TIMEOUT are normal during idle listening",
+              "            isListening = false\n            if (listeningPaused || wakeWordTriggered || isDestroyed) return\n            // SpeechRecognizer errors like NO_MATCH or SPEECH_TIMEOUT are normal during idle listening",
+              1
+          )
+          s = s.replace(
+              "            isListening = false\n            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)",
+              "            isListening = false\n            if (listeningPaused || wakeWordTriggered || isDestroyed) return\n            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)",
+              1
+          )
+          s = s.replace(
+              "                if (checkWakeWordTrigger(partialText)) {\n                    speechRecognizer?.stopListening()\n                    isListening = false\n                    handleWakeWordTriggered(partialText)\n                }",
+              "                if (!wakeWordTriggered && !listeningPaused && checkWakeWordTrigger(partialText)) {\n                    handleWakeWordTriggered(partialText)\n                }",
+              1
+          )
+          s = s.replace(
+              "    private fun handleWakeWordTriggered(rawSpeech: String) {\n        Log.i(TAG,",
+              "    private fun handleWakeWordTriggered(rawSpeech: String) {\n        if (wakeWordTriggered || listeningPaused || isDestroyed) return\n        wakeWordTriggered = true\n        isListening = false\n        handler.removeCallbacks(restartRunnable)\n        try { speechRecognizer?.cancel() } catch (_: Exception) {}\n        Log.i(TAG,",
+              1
+          )
+          s = s.replace(
+              "        // Restart listener after a delay to allow the active session to complete\n        scheduleRestart(6000)",
+              "        // Do not restart the wake recognizer while MainActivity owns the microphone.\n        // MainActivity explicitly resumes this service when it moves to the background."
+          ,1)
+
+          if "private fun pauseListeningForAssistant()" not in s:
+              s = s.replace(
+                  "    override fun onDestroy() {",
+                  """    private fun pauseListeningForAssistant() {
+          listeningPaused = true
+          isListening = false
+          handler.removeCallbacks(restartRunnable)
+          try {
+              speechRecognizer?.cancel()
+              speechRecognizer?.destroy()
+          } catch (e: Exception) {
+              Log.w(TAG, "Recognizer pause cleanup failed", e)
+          }
+          speechRecognizer = null
+          Log.i(TAG, "Wake recognizer paused; assistant now owns the microphone")
+      }
+
+      override fun onDestroy() {""",
+                  1
+              )
+
+          s = s.replace(
+              "        const val ACTION_STOP_SERVICE = \"com.myra.assistant.ACTION_STOP_WAKE_WORD\"",
+              "        const val ACTION_STOP_SERVICE = \"com.myra.assistant.ACTION_STOP_WAKE_WORD\"\n        const val ACTION_PAUSE_LISTENING = \"com.myra.assistant.ACTION_PAUSE_WAKE_LISTENING\"\n        const val ACTION_RESUME_LISTENING = \"com.myra.assistant.ACTION_RESUME_WAKE_LISTENING\"",
+              1
+          )
+          if "fun pauseForAssistant(context: Context)" not in s:
+              s = s.replace(
+                  "        fun stop(context: Context) {",
+                  """        fun pauseForAssistant(context: Context) {
+              val intent = Intent(context, MyraWakeWordService::class.java).apply { action = ACTION_PAUSE_LISTENING }
+              context.startService(intent)
+          }
+
+          fun resumeWhenAppBackgrounded(context: Context) {
+              val intent = Intent(context, MyraWakeWordService::class.java).apply { action = ACTION_RESUME_LISTENING }
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
+              else context.startService(intent)
+          }
+
+          fun stop(context: Context) {""",
+                  1
+              )
+          service.write_text(s)
+
+          activity = Path("app/src/main/java/com/myra/assistant/MainActivity.kt")
+          a = activity.read_text()
+          if "MyraWakeWordService.pauseForAssistant(this)" not in a:
+              a = a.replace(
+                  "    override fun onResume() {\n        super.onResume()",
+                  "    override fun onResume() {\n        super.onResume()\n        com.myra.assistant.services.MyraWakeWordService.pauseForAssistant(this)",
+                  1
+              )
+          if "override fun onStop()" not in a:
+              a = a.replace(
+                  "    override fun onNewIntent(intent: Intent) {",
+                  """    override fun onStop() {
+          super.onStop()
+          // The foreground wake service already exists; resume its listener when the UI leaves foreground.
+          com.myra.assistant.services.MyraWakeWordService.resumeWhenAppBackgrounded(this)
+      }
+
+      override fun onNewIntent(intent: Intent) {""",
+                  1
+              )
+          a = a.replace(
+              "        if (isAutoVoice) {",
+              "        if (isAutoVoice) {\n            com.myra.assistant.services.MyraWakeWordService.pauseForAssistant(this)",
+              1
+          )
+          activity.write_text(a)
+          print("Wake-word microphone ownership and lifecycle safeguards applied.")
+          PY
       - name: Upload patched MYRA source snapshot
         uses: actions/upload-artifact@v4
         with:
