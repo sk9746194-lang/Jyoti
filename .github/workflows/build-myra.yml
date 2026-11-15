@@ -1115,34 +1115,35 @@ jobs:
           # 3) Lock-screen overlay must not initiate calls/SOS without unlocking and owner confirmation.
           p = root / "app/src/main/java/com/myra/assistant/ui/LockScreenOverlayActivity.kt"
           s = p.read_text()
-          old_call = '''                        CommandIntent.CALL_PHONE -> {
-                              val res = phoneControl.handleCallCommand(parsed.target)
-                              assistantReply = res.message
-                              assistantState = AssistantState.SPEAKING
-                              speechEngine?.speak(res.message)
-                          }'''
-          new_call = '''                        CommandIntent.CALL_PHONE -> {
-                              val msg = "कॉल करने से पहले फोन अनलॉक करें और MYRA में मालिक की पुष्टि करें। अभी कॉल नहीं की गई।"
-                              assistantReply = msg
-                              assistantState = AssistantState.SPEAKING
-                              speechEngine?.speak(msg)
-                          }'''
-          s = s.replace(old_call, new_call, 1)
-          old_sos = '''                        CommandIntent.EMERGENCY_SOS -> {
-                              phoneControl.handleCallCommand("112")
-                              deviceControl.toggleFlashlight(true)
-                              val msg = "इमरजेंसी SOS सक्रिय! 112 डायल किया जा रहा है।"
-                              assistantReply = msg
-                              assistantState = AssistantState.SPEAKING
-                              speechEngine?.speak(msg)
-                          }'''
-          new_sos = '''                        CommandIntent.EMERGENCY_SOS -> {
-                              val msg = "SOS शुरू करने से पहले फोन अनलॉक करें और MYRA में पुष्टि करें। लॉक स्क्रीन से कोई कॉल नहीं की गई।"
-                              assistantReply = msg
-                              assistantState = AssistantState.SPEAKING
-                              speechEngine?.speak(msg)
-                          }'''
-          s = s.replace(old_sos, new_sos, 1)
+          callBranch = "\\n".join([
+              "                        CommandIntent.CALL_PHONE -> {",
+              "                            val msg = \\\"कॉल करने से पहले फोन अनलॉक करें और MYRA में मालिक की पुष्टि करें। अभी कॉल नहीं की गई।\\"",
+              "                            assistantReply = msg",
+              "                            assistantState = AssistantState.SPEAKING",
+              "                            speechEngine?.speak(msg)",
+              "                        }"
+          ])
+          callStart = s.find("                        CommandIntent.CALL_PHONE -> {")
+          callEnd = s.find("                        CommandIntent.EMERGENCY_SOS -> {", callStart)
+          if callStart >= 0 and callEnd > callStart:
+              s = s[:callStart] + callBranch + "\\n" + s[callEnd:]
+          else:
+              raise SystemExit("Lock-screen call branch not found")
+
+          sosBranch = "\\n".join([
+              "                        CommandIntent.EMERGENCY_SOS -> {",
+              "                            val msg = \\\"SOS शुरू करने से पहले फोन अनलॉक करें और MYRA में पुष्टि करें। लॉक स्क्रीन से कोई कॉल नहीं की गई।\\"",
+              "                            assistantReply = msg",
+              "                            assistantState = AssistantState.SPEAKING",
+              "                            speechEngine?.speak(msg)",
+              "                        }"
+          ])
+          sosStart = s.find("                        CommandIntent.EMERGENCY_SOS -> {")
+          sosEnd = s.find("                        CommandIntent.ADJUST_VOLUME -> {", sosStart)
+          if sosStart >= 0 and sosEnd > sosStart:
+              s = s[:sosStart] + sosBranch + "\\n" + s[sosEnd:]
+          else:
+              raise SystemExit("Lock-screen SOS branch not found")
           p.write_text(s)
 
           # 4) Never fabricate battery, OTP, parking, location, RAM or temperature values offline.
@@ -1230,6 +1231,102 @@ jobs:
           com.myra.assistant.services.MyraWakeWordService.pauseForAssistant(this)
           }''')
           p.write_text(s)
+
+          # 7) Pair-token authorization for all privileged LAN routes on both phones.
+          p = root / "app/src/main/java/com/myra/assistant/connect/ConnectionTransport.kt"
+          s = p.read_text()
+          if "val isAuthorizedPairedRequest" not in s:
+              marker = "                // Route request\n                val responseJson: String = when {"
+              insert = """                // Route request
+                val isAuthorizedPairedRequest = authTokenHeader.isNotBlank() &&
+                    secureStore.getDeviceByToken(authTokenHeader) != null
+                val responseJson: String = when {
+                    path in setOf("/screen/frame", "/gesture", "/file/init", "/file/chunk", "/file/finalize", "/file/cancel") &&
+                        method == "POST" && !isAuthorizedPairedRequest ->
+                        gson.toJson(mapOf("status" to "error", "message" to "Unauthorized: paired device token required"))
+          """
+              if marker not in s:
+                  raise SystemExit("Primary phone transport route insertion point missing")
+              s = s.replace(marker, insert.rstrip("\n"), 1)
+          s = s.replace("                socket.use { s ->\n", "                socket.use { s ->\n                    s.soTimeout = 5000\n", 1)
+          p.write_text(s)
+
+          p = root / "MYRA_Companion_Project/app/src/main/java/com/myra/companion/service/CompanionHotspotServer.kt"
+          s = p.read_text()
+          if "Unauthorized: paired device token required" not in s:
+              marker = "                val responseJson: String = when {"
+              insert = """                val protectedPath = path in setOf("/screen/frame", "/gesture", "/file/init", "/file/chunk", "/file/finalize")
+                val responseJson: String = when {
+                    protectedPath && method == "POST" &&
+                        (authorizedAuthToken.isBlank() || authTokenHeader != authorizedAuthToken) ->
+                        gson.toJson(mapOf("status" to "PERMISSION_REQUIRED", "message" to "Unauthorized: paired device token required"))
+          """
+              if marker not in s:
+                  raise SystemExit("Companion transport route insertion point missing")
+              s = s.replace(marker, insert.rstrip("\n"), 1)
+          s = s.replace("if (authorizedAuthToken.isNotBlank() && token != authorizedAuthToken)", "if (authorizedAuthToken.isBlank() || token != authorizedAuthToken)")
+          s = s.replace("            socket.use { s ->\n", "            socket.use { s ->\n                s.soTimeout = 5000\n", 1)
+          p.write_text(s)
+
+          # 8) Unsupported ActionBrain intents must never manufacture success; WhatsApp stays draft-only.
+          p = root / "app/src/main/java/com/myra/assistant/tools/ActionBrain.kt"
+          s = p.read_text()
+          s = s.replace("whatsAppAutomation.handleWhatsAppCommand(contact, message, autoSend = true).success",
+                        "whatsAppAutomation.handleWhatsAppCommand(contact, message, autoSend = false).success")
+          s = s.replace('''                else -> {
+                      ActionResult(
+                          actionId = plan.actionId,
+                          status = ActionStatus.VERIFIED_SUCCESS,
+                          messageHindi = "${plan.title} safaltapoorvak poora ho gaya.",
+                          messageEnglish = "${plan.title} executed successfully.",
+                          isVerified = true
+                      )
+                  }''',
+          '''                else -> {
+                      ActionResult(
+                          actionId = plan.actionId,
+                          status = ActionStatus.FAILED,
+                          messageHindi = "${plan.title}: यह एक्शन अभी लागू नहीं है; कोई बदलाव नहीं किया गया।",
+                          messageEnglish = "${plan.title}: unsupported action; nothing was executed.",
+                          isVerified = false
+                      )
+                  }''')
+          p.write_text(s)
+
+          # 9) Remove all retiring Gemini 3.6 fallback/model-list references.
+          for rel in [
+              "app/src/main/java/com/myra/assistant/data/GeminiApiClient.kt",
+              "app/src/main/java/com/myra/assistant/provider/GeminiDirectProvider.kt"
+          ]:
+              p = root / rel
+              s = p.read_text().replace('"gemini-3.6-flash",', '').replace(', "gemini-3.6-flash"', '')
+              s = s.replace(" or 'gemini-3.6-flash'", "")
+              p.write_text(s)
+          p = root / "server/server.ts"
+          s = p.read_text().replace('"gemini-3.6-flash",', '').replace(', "gemini-3.6-flash"', '')
+          s = s.replace('req.headers["x-forwarded-for"] || req.socket.remoteAddress', 'req.ip || req.socket.remoteAddress')
+          p.write_text(s)
+
+          # 10) Make offline backend action claims honest: parsing is not device execution.
+          p = root / "server/server.ts"
+          s = p.read_text()
+          truthful = {
+              'reply = `Torch ${state === "on" ? "turn ON" : "turn OFF"} kar diya gaya hai.`;':'reply = "Command samajh li gayi, lekin server phone ki flashlight execute nahi kar sakta. MYRA Android app se action confirm karein."; ',
+              'reply = `"${query}" play kiya ja raha hai YouTube Music / Spotify par!`;':'reply = "Music request samajh li gayi, lekin server ne phone par music start nahi kiya."; ',
+              'reply = "WhatsApp chat khol kar message ready kar diya hai!";':'reply = "WhatsApp request samajh li gayi; server ne chat nahi kholi aur message nahi bheja."; ',
+              'reply = `${contact} ko call lagayi ja rahi hai...`;':'reply = "Call request samajh li gayi; server ne call start nahi ki. MYRA app mein confirm karein."; ',
+              'reply = "Subah 6:00 baje ka alarm set kar diya hai!";':'reply = "Alarm request samajh li gayi; server ne alarm set nahi kiya."; ',
+              'reply = "10 minute ka countdown timer shuru ho gaya hai!";':'reply = "Timer request samajh li gayi; server ne timer start nahi kiya."; ',
+              'reply = "Screen lock kar di gayi hai (Urgent safety action executed).";':'reply = "Lock request samajh li gayi; server ne phone lock nahi kiya."; ',
+              'reply = "Aapka pichhla active project \'Next Generation Personal AI Assistant Upgrade\' tha, jisme humne Smart Memory, Action Brain, Daily Life Manager, aur 3 Theme Color Palettes verify kiye hain. Chaliye yahin se continue karte hain!";':'reply = "Pichhle project ka data is server fallback mein load nahi hai; mujhe current project details nahi mili hain."; ',
+              'reply = "Suprabhat! Aaj aapke sabhi tasks schedule ho chuke hain aur reminders active hain. Aapka din shubh aur safal rahe!";':'reply = "Morning briefing ke liye calendar aur tasks data connected nahi hai; koi reminder schedule nahi kiya gaya."; ',
+              'reply = "MYRA Truth & Safety Center active hai. Free-Tier 15 RPM protection on hai, aur sensitive actions ke liye confirmation zaroori hai.";':'reply = "MYRA server fallback mode mein hai; device-side permissions aur sensitive-action security status verify nahi kiya ja sakta."; '
+          }
+          for old, new in truthful.items():
+              s = s.replace(old, new)
+          p.write_text(s)
+
+          print("Added paired-token checks for LAN gesture/file/screen routes, locked Companion command auth, draft-only WhatsApp in ActionBrain, honest unsupported-action results, and removed retiring model fallback.")
 
           print("Applied secure key migration, fail-closed sensitive action checks, honest SOS results, lock-screen blocking, fake-data removal, API throttling, Live endpoint and model fallback updates, and microphone ownership safeguard.")
           PY
