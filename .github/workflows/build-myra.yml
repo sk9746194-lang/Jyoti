@@ -582,9 +582,9 @@ jobs:
           }
           speechRecognizer = null
           Log.i(TAG, "Wake recognizer paused; assistant now owns the microphone")
-      }
+          }
 
-      override fun onDestroy() {""",
+          override fun onDestroy() {""",
                   1
               )
 
