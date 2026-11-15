@@ -112,40 +112,32 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
           p = Path("MYRA_SOURCE/app/src/main/java/com/myra/assistant/ui/screens/MainVoiceScreen.kt")
           s = p.read_text()
-          old = """                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(AccentEmerald)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Live",
-                            color = AccentEmerald,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )"""
-          new = """                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(if (voiceStatus.fallbackActive) LightBlue else AccentEmerald)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (voiceStatus.fallbackActive) "Local" else "Gemini Live",
-                            color = if (voiceStatus.fallbackActive) LightBlue else AccentEmerald,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )"""
-          if new not in s:
-              if old not in s:
-                  raise SystemExit("Voice Live indicator source anchor missing; no blind replacement made")
-              s = s.replace(old, new, 1)
+
+          # Match the label independent of indentation/formatting. Never claim Live
+          # while the app is using the native fallback speech engine.
+          label_pattern = r'text\\s*=\\s*"Live"'
+          s, label_count = re.subn(
+              label_pattern,
+              'text = if (voiceStatus.fallbackActive) "Local" else "Gemini Live"',
+              s,
+              count=1
+          )
+          if label_count == 0 and 'text = if (voiceStatus.fallbackActive) "Local" else "Gemini Live"' not in s:
+              raise SystemExit("Could not find the Live status label in MainVoiceScreen.kt")
+
+          # Update the adjacent status dot only if the exact old expression exists.
+          s = s.replace(
+              '.background(AccentEmerald)',
+              '.background(if (voiceStatus.fallbackActive) LightBlue else AccentEmerald)',
+              1
+          )
+
           p.write_text(s)
-          print("Voice header now matches active speech engine instead of always claiming Live.")
+          print("Voice status label now distinguishes Local fallback from Gemini Live.")
           PY
       - name: Align dependencies and repair MYRA source
         run: |
