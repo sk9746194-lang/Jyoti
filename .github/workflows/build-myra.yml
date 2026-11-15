@@ -1141,7 +1141,7 @@ jobs:
           sosStart = s.find("                        CommandIntent.EMERGENCY_SOS -> {")
           sosEnd = s.find("                        CommandIntent.ADJUST_VOLUME -> {", sosStart)
           if sosStart >= 0 and sosEnd > sosStart:
-              s = s[:sosStart] + sosBranch + "\\n" + s[sosEnd:]
+              s = s[:sosStart] + sosBranch + "\n" + s[sosEnd:]
           else:
               raise SystemExit("Lock-screen SOS branch not found")
           p.write_text(s)
@@ -1351,6 +1351,53 @@ jobs:
               s = s.replace(old, new)
           p.write_text(s)
 
+          # Add socket timeouts and bounded request/file sizes to both LAN servers.
+          p = root / "app/src/main/java/com/myra/assistant/connect/ConnectionTransport.kt"
+          s = p.read_text()
+          s = s.replace("            socket.use { s ->\\n                val reader", "            socket.use { s ->\\n                s.soTimeout = 5000\\n                val reader", 1)
+          if "Request body too large" not in s:
+              anchor = "                // Read Request Body\\n                val body = if (contentLength > 0) {"
+              guard = """                if (contentLength > 1_048_576) {
+                    val errorBytes = """{"status":"error","message":"Request body too large"}""".toByteArray(Charsets.UTF_8)
+                    writer.write("HTTP/1.1 413 Payload Too Large\\r\\nContent-Length: ${errorBytes.size}\\r\\nConnection: close\\r\\n\\r\\n")
+                    writer.flush()
+                    s.getOutputStream().write(errorBytes)
+                    s.getOutputStream().flush()
+                    return
+                }
+
+                // Read Request Body
+                val body = if (contentLength > 0) {"""
+              if anchor not in s:
+                  raise SystemExit("Primary transport body-read anchor missing")
+              s = s.replace(anchor, guard, 1)
+          s = s.replace("                            val header = gson.fromJson(body, FileTransferHeader::class.java)\\n                            val cacheDir", "                            val header = gson.fromJson(body, FileTransferHeader::class.java)\\n                            require(header.fileSize in 1..(50L * 1024 * 1024)) { \\"File exceeds 50 MB limit\\" }\\n                            val cacheDir", 1)
+          s = s.replace("                                incoming.fos.write(bytes)\\n                                incoming.bytesWritten += bytes.size", "                                if (incoming.bytesWritten + bytes.size > incoming.header.fileSize) {\\n                                    throw IllegalArgumentException(\\\"Transfer exceeds declared file size\\\")\\n                                }\\n                                incoming.fos.write(bytes)\\n                                incoming.bytesWritten += bytes.size", 1)
+          p.write_text(s)
+
+          p = root / "MYRA_Companion_Project/app/src/main/java/com/myra/companion/service/CompanionHotspotServer.kt"
+          s = p.read_text()
+          if "Request body too large" not in s:
+              s = s.replace("                val reader = BufferedReader(InputStreamReader(s.getInputStream()))", "                s.soTimeout = 5000\\n                val reader = BufferedReader(InputStreamReader(s.getInputStream()))", 1)
+              anchor = "                val body = if (contentLength > 0) {"
+              guard = """                if (contentLength > 1_048_576) {
+                    val errorBytes = """{"status":"error","message":"Request body too large"}""".toByteArray(Charsets.UTF_8)
+                    writer.write("HTTP/1.1 413 Payload Too Large\\r\\nContent-Length: ${errorBytes.size}\\r\\nConnection: close\\r\\n\\r\\n")
+                    writer.flush()
+                    s.getOutputStream().write(errorBytes)
+                    s.getOutputStream().flush()
+                    return
+                }
+
+                val body = if (contentLength > 0) {"""
+              if anchor not in s:
+                  raise SystemExit("Companion transport body-read anchor missing")
+              s = s.replace(anchor, guard, 1)
+          s = s.replace("                        val fileSize = (header[\\"fileSize\\"] as? Number)?.toLong() ?: 0L\\n                        val sha256", "                        val fileSize = (header[\\"fileSize\\"] as? Number)?.toLong() ?: 0L\\n                        require(fileSize in 1..(50L * 1024 * 1024)) { \\"File exceeds 50 MB limit\\" }\\n                        val sha256", 1)
+          s = s.replace("                            incoming.fos.write(bytes)\\n                            incoming.bytesWritten += bytes.size", "                            if (incoming.bytesWritten + bytes.size > incoming.fileSize) {\\n                                throw IllegalArgumentException(\\\"Transfer exceeds declared file size\\\")\\n                            }\\n                            incoming.fos.write(bytes)\\n                            incoming.bytesWritten += bytes.size", 1)
+          p.write_text(s)
+
+          print("Added bounded socket reads, 1 MB request cap and 50 MB transfer limits.")
           print("Added paired-token checks for LAN gesture/file/screen routes, locked Companion command auth, draft-only WhatsApp in ActionBrain, honest unsupported-action results, and removed retiring model fallback.")
 
           print("Applied secure key migration, fail-closed sensitive action checks, honest SOS results, lock-screen blocking, fake-data removal, API throttling, Live endpoint and model fallback updates, and microphone ownership safeguard.")
