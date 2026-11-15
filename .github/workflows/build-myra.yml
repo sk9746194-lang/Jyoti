@@ -32,6 +32,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          from textwrap import dedent
 
           root = Path("MYRA_SOURCE/app/src/main/java/com/myra/assistant")
           chat = root / "ui/screens/ChatScreen.kt"
@@ -43,10 +44,10 @@ jobs:
                   raise SystemExit("ChatScreen callback signature anchor missing")
               s = s.replace(old_sig, new_sig, 1)
 
-          marker = """        // -------------------------------------------------------------
-          // 2. MESSAGES LIST OR EMPTY STATE
-          // -------------------------------------------------------------"""
-          shortcuts = """        // Quick access: these tools are usable from Chat without leaving MYRA.
+          if "Quick access: these tools are usable from Chat" not in s:
+              marker = "        // 2. MESSAGES LIST OR EMPTY STATE"
+              shortcuts = dedent("""\
+                  // Quick access: Vision and Automations are available directly from Chat.
                   Row(
                       modifier = Modifier
                           .fillMaxWidth()
@@ -87,13 +88,10 @@ jobs:
                       }
                   }
 
-        // -------------------------------------------------------------
-          // 2. MESSAGES LIST OR EMPTY STATE
-          // -------------------------------------------------------------"""
-          if "Quick access: these tools are usable from Chat" not in s:
+              """)
               if marker not in s:
                   raise SystemExit("ChatScreen message-list insertion anchor missing")
-              s = s.replace(marker, shortcuts, 1)
+              s = s.replace(marker, shortcuts + marker, 1)
           chat.write_text(s)
 
           main = root / "MainActivity.kt"
