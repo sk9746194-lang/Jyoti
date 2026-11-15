@@ -961,6 +961,37 @@ jobs:
           print("Gemini Live tools, tool-call execution/response, and live GF-mode context updates patched.")
           
           PY
+      - name: Reduce duplicate microphone restarts and wake-service calls
+        working-directory: MYRA_SOURCE
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          activity = Path("app/src/main/java/com/myra/assistant/MainActivity.kt")
+          s = activity.read_text()
+          pause_call = "            com.myra.assistant.services.MyraWakeWordService.pauseForAssistant(this)"
+          s = re.sub(r"(?:^" + re.escape(pause_call) + r"\\n){2,}", pause_call + "\\n", s, flags=re.MULTILINE)
+          activity.write_text(s)
+
+          wake = Path("app/src/main/java/com/myra/assistant/services/MyraWakeWordService.kt")
+          s = wake.read_text()
+          s = s.replace("SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 800L", "SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 1500L")
+          s = s.replace("else -> 400L", "else -> 1200L")
+          s = s.replace("scheduleRestart(250)", "scheduleRestart(1200)")
+          s = s.replace("delayMs.coerceAtLeast(900L)", "delayMs.coerceAtLeast(1500L)")
+          wake.write_text(s)
+
+          speech = Path("app/src/main/java/com/myra/assistant/voice/SystemSpeechEngine.kt")
+          s = speech.read_text()
+          s = s.replace("scheduleListeningRestart(300)", "scheduleListeningRestart(1200)")
+          s = s.replace("}, 600)", "}, 1200)")
+          s = s.replace("scheduleListeningRestart(1000)", "scheduleListeningRestart(1500)")
+          s = s.replace("scheduleListeningRestart(800)", "scheduleListeningRestart(1500)")
+          speech.write_text(s)
+
+          print("Collapsed repeated wake-pause calls and added restart backoff to reduce rapid microphone reopen cycles.")
+          PY
       - name: Upload patched MYRA source snapshot
         uses: actions/upload-artifact@v4
         with:
