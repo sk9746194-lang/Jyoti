@@ -688,18 +688,18 @@ jobs:
           engine = Path("app/src/main/java/com/myra/assistant/voice/GeminiLiveVoiceEngine.kt")
           s = engine.read_text()
           if "import com.myra.assistant.data.GeminiApiClient" not in s:
-              s = s.replace("import android.util.Log", "import android.util.Log\\nimport com.myra.assistant.data.GeminiApiClient", 1)
-          old_ctor = """    private val onSpeakingStateChanged: (Boolean) -> Unit,
-              private val onStatusChanged: (Boolean, String?) -> Unit
-              ) {"""
-          new_ctor = """    private val onSpeakingStateChanged: (Boolean) -> Unit,
-              private val onStatusChanged: (Boolean, String?) -> Unit,
+              s = s.replace("import android.util.Log", "import android.util.Log\nimport com.myra.assistant.data.GeminiApiClient", 1)
+          old_ctor = """    private val onStatusChanged: (Boolean, String?) -> Unit
+          ) {"""
+          new_ctor = """    private val onStatusChanged: (Boolean, String?) -> Unit,
               private val onFunctionCall: (String, Map<String, Any?>, String) -> Unit = { _, _, _ -> }
-              ) {"""
+          ) {"""
           if old_ctor in s:
               s = s.replace(old_ctor, new_ctor, 1)
+          elif "onFunctionCall: (String, Map<String, Any?>, String)" not in s:
+              raise SystemExit("GeminiLiveVoiceEngine constructor anchor missing")
           if "private var toolCallPending = false" not in s:
-              s = s.replace('    private var lastWsUrl: String = ""', '    private var lastWsUrl: String = ""\\n    @Volatile private var toolCallPending = false\\n    @Volatile private var pendingToolCalls = 0', 1)
+              s = s.replace('    private var lastWsUrl: String = ""', '    private var lastWsUrl: String = ""\n    @Volatile private var toolCallPending = false\n    @Volatile private var pendingToolCalls = 0', 1)
           if 'put("tools", GeminiApiClient.getToolsDeclarationJson())' not in s:
               old = """                put("systemInstruction", JSONObject().apply {
                       put("parts", JSONArray().apply {
@@ -743,7 +743,7 @@ jobs:
           if 'if (root.has("toolCall"))' not in s:
               old = '        if (root.has("serverContent")) {'
               if old not in s: raise SystemExit("Live parser serverContent anchor missing")
-              s = s.replace(old, '        if (root.has("toolCall")) {\\n            handleGoogleToolCall(root.getJSONObject("toolCall"))\\n            return\\n        }\\n\\n' + old, 1)
+              s = s.replace(old, '        if (root.has("toolCall")) {\n            handleGoogleToolCall(root.getJSONObject("toolCall"))\n            return\n        }\n\n' + old, 1)
 
           if "private fun handleGoogleToolCall(" not in s:
               marker = "    private fun calculatePcmRms(pcmBytes: ByteArray) {"
@@ -803,35 +803,35 @@ jobs:
               if marker not in s: raise SystemExit("Live engine insertion marker missing")
               s = s.replace(marker, methods + marker, 1)
           if "if (toolCallPending) return" not in s:
-              s = s.replace("    fun sendAudioChunk(pcmChunk: ByteArray) {", "    fun sendAudioChunk(pcmChunk: ByteArray) {\\n        if (toolCallPending) return", 1)
+              s = s.replace("    fun sendAudioChunk(pcmChunk: ByteArray) {", "    fun sendAudioChunk(pcmChunk: ByteArray) {\n        if (toolCallPending) return", 1)
           engine.write_text(s)
 
           activity = Path("app/src/main/java/com/myra/assistant/MainActivity.kt")
           s = activity.read_text()
           old = """                                onStatusChanged = { connected, reason ->
-                                          voiceStatus = voiceStatus.copy(
-                                              fallbackActive = !connected,
-                                              fallbackReason = reason
-                                          )
-                                      }
-                                  )"""
+                                    voiceStatus = voiceStatus.copy(
+                                        fallbackActive = !connected,
+                                        fallbackReason = reason
+                                    )
+                                }
+                            )"""
           new = """                                onStatusChanged = { connected, reason ->
-                                          voiceStatus = voiceStatus.copy(
-                                              fallbackActive = !connected,
-                                              fallbackReason = reason
-                                          )
-                                      },
-                                      onFunctionCall = { functionName, arguments, callId ->
-                                          lifecycleScope.launch {
-                                              try {
-                                                  val outcome = executeFunctionCallOnAndroid(functionName, arguments)
-                                                  liveEngine?.sendFunctionResponse(callId, functionName, outcome.success, outcome.message, outcome.detail)
-                                              } catch (e: Exception) {
-                                                  liveEngine?.sendFunctionResponse(callId, functionName, false, "Action failed: ${e.message}")
-                                              }
-                                          }
-                                      }
-                                  )"""
+                                    voiceStatus = voiceStatus.copy(
+                                        fallbackActive = !connected,
+                                        fallbackReason = reason
+                                    )
+                                },
+                                onFunctionCall = { functionName, arguments, callId ->
+                                    lifecycleScope.launch {
+                                        try {
+                                            val outcome = executeFunctionCallOnAndroid(functionName, arguments)
+                                            liveEngine?.sendFunctionResponse(callId, functionName, outcome.success, outcome.message, outcome.detail)
+                                        } catch (e: Exception) {
+                                            liveEngine?.sendFunctionResponse(callId, functionName, false, "Action failed: ${e.message}")
+                                        }
+                                    }
+                                }
+                            )"""
           if old in s:
               s = s.replace(old, new, 1)
           elif "onFunctionCall = { functionName, arguments, callId ->" not in s:
