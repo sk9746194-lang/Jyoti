@@ -1016,7 +1016,7 @@ jobs:
           get() = prefs.getString("user_gemini_api_key", "") ?: ""
           set(value) = prefs.edit().putString("user_gemini_api_key", value.trim()).apply()
 
-      val hasConfiguredApiKey: Boolean
+          val hasConfiguredApiKey: Boolean
           get() = geminiApiKey.isNotBlank()'''
           new = '''    var geminiApiKey: String
           get() {
@@ -1035,7 +1035,7 @@ jobs:
               prefs.edit().remove("user_gemini_api_key").apply()
           }
 
-      val hasConfiguredApiKey: Boolean
+          val hasConfiguredApiKey: Boolean
           get() = geminiApiKey.isNotBlank()'''
           if old in s:
               s = s.replace(old, new, 1)
@@ -1046,14 +1046,14 @@ jobs:
               .remove("user_gemini_api_key")
               .putString("gemini_api_status", "Not Configured")
               .apply()
-      }'''
+          }'''
           new_clear = '''    fun clearGeminiApiKey() {
           secureKeys.clearGeminiApiKey()
           prefs.edit()
               .remove("user_gemini_api_key")
               .putString("gemini_api_status", "Not Configured")
               .apply()
-      }'''
+          }'''
           s = s.replace(old_clear, new_clear, 1)
           p.write_text(s)
 
@@ -1261,13 +1261,13 @@ jobs:
           super.onStop()
           // The foreground wake service already exists; resume its listener when the UI leaves foreground.
           com.myra.assistant.services.MyraWakeWordService.resumeWhenAppBackgrounded(this)
-      }''',
+          }''',
           '''    override fun onStop() {
           super.onStop()
           // Fail closed: SpeechRecognizer is not a dedicated wake-word engine. Keep it paused
           // until a single-owner microphone lifecycle and dedicated wake model are implemented.
           com.myra.assistant.services.MyraWakeWordService.pauseForAssistant(this)
-      }''')
+          }''')
           p.write_text(s)
 
           print("Applied secure key migration, fail-closed sensitive action checks, honest SOS results, lock-screen blocking, fake-data removal, API throttling, Live endpoint and model fallback updates, and microphone ownership safeguard.")
