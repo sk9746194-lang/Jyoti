@@ -627,9 +627,9 @@ jobs:
           super.onStop()
           // The foreground wake service already exists; resume its listener when the UI leaves foreground.
           com.myra.assistant.services.MyraWakeWordService.resumeWhenAppBackgrounded(this)
-      }
+          }
 
-      override fun onNewIntent(intent: Intent) {""",
+          override fun onNewIntent(intent: Intent) {""",
                   1
               )
           a = a.replace(
