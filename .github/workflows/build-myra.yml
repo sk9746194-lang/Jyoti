@@ -1,7 +1,15 @@
 name: Build MYRA APKs
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
+    inputs:
+      build_apk:
+        description: "Build APK only after all source repairs are complete"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -995,6 +1003,281 @@ jobs:
 
           print("Collapsed repeated wake-pause calls and added restart backoff to reduce rapid microphone reopen cycles.")
           PY
+      - name: Apply MYRA security, truthfulness, storage and lifecycle repairs
+        working-directory: MYRA_SOURCE
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path(".")
+          # 1) Move Gemini API key to Keystore-backed storage and migrate legacy plaintext.
+          p = root / "app/src/main/java/com/myra/assistant/data/PreferencesManager.kt"
+          s = p.read_text()
+          if "import com.myra.assistant.security.SecureKeyStorage" not in s:
+              s = s.replace("import com.myra.assistant.ui.orb.*", "import com.myra.assistant.ui.orb.*\nimport com.myra.assistant.security.SecureKeyStorage")
+          s = s.replace("class PreferencesManager(context: Context) {\n    private val prefs", "class PreferencesManager(context: Context) {\n    private val appContext = context.applicationContext\n    private val secureKeys by lazy { SecureKeyStorage.getInstance(appContext) }\n    private val prefs")
+          old = '''    var geminiApiKey: String
+          get() = prefs.getString("user_gemini_api_key", "") ?: ""
+          set(value) = prefs.edit().putString("user_gemini_api_key", value.trim()).apply()
+
+      val hasConfiguredApiKey: Boolean
+          get() = geminiApiKey.isNotBlank()'''
+          new = '''    var geminiApiKey: String
+          get() {
+              val secureValue = secureKeys.getGeminiApiKey()
+              if (secureValue.isNotBlank()) return secureValue
+              val legacyValue = prefs.getString("user_gemini_api_key", "") ?: ""
+              if (legacyValue.isNotBlank()) {
+                  secureKeys.saveGeminiApiKey(legacyValue)
+                  prefs.edit().remove("user_gemini_api_key").apply()
+                  return secureKeys.getGeminiApiKey()
+              }
+              return ""
+          }
+          set(value) {
+              secureKeys.saveGeminiApiKey(value)
+              prefs.edit().remove("user_gemini_api_key").apply()
+          }
+
+      val hasConfiguredApiKey: Boolean
+          get() = geminiApiKey.isNotBlank()'''
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif "secureKeys.getGeminiApiKey()" not in s:
+              raise SystemExit("PreferencesManager Gemini key block not found")
+          old_clear = '''    fun clearGeminiApiKey() {
+          prefs.edit()
+              .remove("user_gemini_api_key")
+              .putString("gemini_api_status", "Not Configured")
+              .apply()
+      }'''
+          new_clear = '''    fun clearGeminiApiKey() {
+          secureKeys.clearGeminiApiKey()
+          prefs.edit()
+              .remove("user_gemini_api_key")
+              .putString("gemini_api_status", "Not Configured")
+              .apply()
+      }'''
+          s = s.replace(old_clear, new_clear, 1)
+          p.write_text(s)
+
+          # 2) Sensitive local commands fail closed unless owner protection is enabled.
+          p = root / "app/src/main/java/com/myra/assistant/MainActivity.kt"
+          s = p.read_text()
+          old_gate = "if (isSensitive && securityManager.isOwnerProtectionEnabled && securityManager.isSensitiveCommandsProtected) {"
+          new_gate = """if (isSensitive) {
+              if (!securityManager.isOwnerProtectionEnabled || !securityManager.isSensitiveCommandsProtected) {
+                  onReply("सुरक्षा के लिए पहले Settings में Owner Protection और Sensitive Command Protection चालू करें। कोई एक्शन नहीं किया गया।")
+                  return
+              }"""
+          if old_gate in s:
+              s = s.replace(old_gate, new_gate, 1)
+          elif "पहले Settings में Owner Protection" not in s:
+              raise SystemExit("MainActivity sensitive-command gate not found")
+          # Remote actions are sensitive even if a command parser fails to classify their text.
+          s = s.replace(
+              "val isSensitive = biometricManager.checkIsSensitiveAction(parsed.intent, parsed.target, text)",
+              "val isSensitive = biometricManager.checkIsSensitiveAction(parsed.intent, parsed.target, text) || parsed.isRemote || parsed.intent == CommandIntent.EXECUTE_REMOTE_DEVICE",
+              1
+          )
+          # Make Gemini chat/Live function calls go through the same owner biometric authorization.
+          if "private suspend fun authorizeSensitiveToolCall" not in s:
+              marker = "    private suspend fun executeFunctionCallOnAndroid("
+              helper = '''    private suspend fun authorizeSensitiveToolCall(name: String, args: Map<String, Any?>): Boolean {
+              if (!securityManager.isOwnerProtectionEnabled || !securityManager.isSensitiveCommandsProtected) return false
+              if (biometricManager.isSessionValid()) return true
+              val commandText = "$name: " + args.entries.joinToString(", ") { "${it.key}=${it.value}" }
+              return kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+                  biometricManager.authenticate(
+                      activity = this@MainActivity,
+                      title = "MYRA Owner Verification",
+                      subtitle = "संवेदनशील एक्शन के लिए पुष्टि आवश्यक है",
+                      description = "इस एक्शन को करने के लिए फोन के मालिक की पहचान सत्यापित करें।",
+                      commandText = commandText,
+                      actionCategory = name,
+                      onSuccess = {
+                          securityManager.recordBiometricSuccess()
+                          if (continuation.isActive) continuation.resumeWith(Result.success(true))
+                      },
+                      onError = { _, _ ->
+                          if (continuation.isActive) continuation.resumeWith(Result.success(false))
+                      }
+                  )
+              }
+          }
+
+          '''
+              if marker not in s:
+                  raise SystemExit("Function-call method insertion point not found")
+              s = s.replace(marker, helper + marker, 1)
+          item_line = "        val item = GeminiApiClient.FunctionCallItem(name, args)\n        return try {"
+          item_new = """        val item = GeminiApiClient.FunctionCallItem(name, args)
+          if (name in setOf("call_phone", "send_whatsapp", "send_sms", "emergency_sos", "execute_remote_device")) {
+              if (!authorizeSensitiveToolCall(name, args)) {
+                  return GeminiApiClient.ToolExecutionOutcome(
+                      call = item,
+                      success = false,
+                      message = "Owner verification required. Owner Protection चालू करें और MYRA app में action दोबारा confirm करें।"
+                  )
+              }
+          }
+          return try {"""
+          if item_line in s:
+              s = s.replace(item_line, item_new, 1)
+          elif "authorizeSensitiveToolCall(name, args)" not in s:
+              raise SystemExit("Function-call authorization insertion point not found")
+          old_wa = '''                    whatsAppAutomation.handleWhatsAppCommand(target, msg, autoSend = false) { }
+                    CommandResult.success("WhatsApp पर $target के लिए संदेश तैयार कर दिया गया है।", target = target, detail = msg)'''
+          new_wa = '''                    whatsAppAutomation.handleWhatsAppCommand(target, msg, autoSend = false) { }'''
+          s = s.replace(old_wa, new_wa, 1)
+          # SOS only reports what Android actually accepted; it cannot claim a connected call.
+          old_sos = '''                val emergencyCall = phoneControl.handleCallCommand("112")
+                deviceControl.toggleFlashlight(true)
+                com.myra.assistant.tools.CommandResult.success(
+                    "इमरजेंसी SOS सक्रिय कर दिया गया है। 112 डायल किया जा रहा है और फ्लैशलाइट ऑन है।",
+                    target = "emergency"
+                )'''
+          new_sos = '''                val emergencyCall = phoneControl.handleCallCommand("112")
+                val flashlight = deviceControl.toggleFlashlight(true)
+                val details = "112 dialer: ${if (emergencyCall.success) "opened" else "failed"}; flashlight: ${if (flashlight.success) "on" else "failed"}"
+                if (emergencyCall.success || flashlight.success) {
+                    com.myra.assistant.tools.CommandResult.success(
+                        "SOS प्रयास: ${if (emergencyCall.success) "112 dialer खुला है (कॉल कनेक्ट होने की पुष्टि नहीं है)" else "112 dialer नहीं खुला"}; ${if (flashlight.success) "फ्लैशलाइट चालू है" else "फ्लैशलाइट चालू नहीं हो सकी"}।",
+                        target = "emergency",
+                        detail = details
+                    )
+                } else {
+                    com.myra.assistant.tools.CommandResult.failed("SOS असफल: 112 dialer नहीं खुला और फ्लैशलाइट भी चालू नहीं हुई।", target = "emergency", detail = details)
+                }'''
+          if old_sos in s:
+              s = s.replace(old_sos, new_sos, 1)
+          elif "112 dialer खुला है (कॉल कनेक्ट होने की पुष्टि नहीं है)" not in s:
+              raise SystemExit("MainActivity SOS result block not found")
+          p.write_text(s)
+
+          # 3) Lock-screen overlay must not initiate calls/SOS without unlocking and owner confirmation.
+          p = root / "app/src/main/java/com/myra/assistant/ui/LockScreenOverlayActivity.kt"
+          s = p.read_text()
+          old_call = '''                        CommandIntent.CALL_PHONE -> {
+                              val res = phoneControl.handleCallCommand(parsed.target)
+                              assistantReply = res.message
+                              assistantState = AssistantState.SPEAKING
+                              speechEngine?.speak(res.message)
+                          }'''
+          new_call = '''                        CommandIntent.CALL_PHONE -> {
+                              val msg = "कॉल करने से पहले फोन अनलॉक करें और MYRA में मालिक की पुष्टि करें। अभी कॉल नहीं की गई।"
+                              assistantReply = msg
+                              assistantState = AssistantState.SPEAKING
+                              speechEngine?.speak(msg)
+                          }'''
+          s = s.replace(old_call, new_call, 1)
+          old_sos = '''                        CommandIntent.EMERGENCY_SOS -> {
+                              phoneControl.handleCallCommand("112")
+                              deviceControl.toggleFlashlight(true)
+                              val msg = "इमरजेंसी SOS सक्रिय! 112 डायल किया जा रहा है।"
+                              assistantReply = msg
+                              assistantState = AssistantState.SPEAKING
+                              speechEngine?.speak(msg)
+                          }'''
+          new_sos = '''                        CommandIntent.EMERGENCY_SOS -> {
+                              val msg = "SOS शुरू करने से पहले फोन अनलॉक करें और MYRA में पुष्टि करें। लॉक स्क्रीन से कोई कॉल नहीं की गई।"
+                              assistantReply = msg
+                              assistantState = AssistantState.SPEAKING
+                              speechEngine?.speak(msg)
+                          }'''
+          s = s.replace(old_sos, new_sos, 1)
+          p.write_text(s)
+
+          # 4) Never fabricate battery, OTP, parking, location, RAM or temperature values offline.
+          p = root / "server/server.ts"
+          s = p.read_text()
+          replacements = {
+            'reply = "Phone ki battery 84% hai aur Fast Charging active hai.";':'reply = "Is server ke paas phone battery telemetry nahi hai, isliye actual battery status उपलब्ध नहीं है।";',
+            'reply = "Aapka latest bank/app OTP hai: 482910 (HDFC Bank).";':'reply = "Is server ko aapke SMS/notifications ka access nahi hai, isliye OTP उपलब्ध नहीं है।";',
+            'reply = "Aapki gaadi Level 2, Spot B-14 (Inorbit Mall Parking) par parked hai.";':'reply = "Parking location ka real device data उपलब्ध नहीं है।";',
+            'reply = "Phone ka diagnostic complete: RAM usage 58%, Temperature 36°C (Normal), BG apps optimize kar di gayi hain.";':'reply = "Phone diagnostic ke liye live device telemetry connected nahi hai; koi measurement ya optimization nahi ki gayi।";',
+            'reply = "Aap Sector 62, Noida, Uttar Pradesh ke paas hain. GPS accuracy: High.";':'reply = "Is server ko live GPS location nahi mili, isliye current location batana संभव नहीं है।";',
+          }
+          for old, new in replacements.items():
+              s = s.replace(old, new)
+          if "482910" in s or "Sector 62, Noida" in s or "Inorbit Mall Parking" in s or "RAM usage 58%" in s:
+              raise SystemExit("A fabricated private/device value remains in local parser")
+          # Rate-limit public API endpoints by client IP to protect any configured server Gemini key.
+          if "MYRA_API_RATE_LIMIT" not in s:
+              marker = "  app.use(express.json());"
+              limiter = '''
+          app.use(express.json());
+
+          // MYRA_API_RATE_LIMIT: bounded per-IP request throttle for public API routes.
+          const apiRateState = new Map<string, { windowStart: number; count: number }>();
+          app.use("/api/", (req, res, next) => {
+            const now = Date.now();
+            const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+            const windowMs = 60_000;
+            const limit = 45;
+            let entry = apiRateState.get(ip);
+            if (!entry || now - entry.windowStart >= windowMs) {
+              entry = { windowStart: now, count: 0 };
+              apiRateState.set(ip, entry);
+            }
+            entry.count += 1;
+            if (apiRateState.size > 5000) {
+              for (const [key, value] of apiRateState) {
+                if (now - value.windowStart >= windowMs) apiRateState.delete(key);
+              }
+            }
+            if (entry.count > limit) {
+              res.setHeader("Retry-After", "60");
+              return res.status(429).json({ error: "Rate limit exceeded. Try again shortly." });
+            }
+            return next();
+          });
+          '''
+              if marker not in s:
+                  raise SystemExit("Backend JSON middleware insertion point not found")
+              s = s.replace(marker, limiter.strip("\n"), 1)
+          p.write_text(s)
+
+          # 5) Use the documented Live API beta WebSocket path and remove the retiring 3.6 fallback.
+          for rel in [
+              "app/src/main/java/com/myra/assistant/voice/GeminiLiveSessionManager.kt",
+              "app/src/main/java/com/myra/assistant/voice/GeminiLiveVoiceEngine.kt",
+              "app/src/main/java/com/myra/assistant/MainActivity.kt"
+          ]:
+              p = root / rel
+              s = p.read_text().replace("google.ai.generativelanguage.v1alpha.GenerativeService", "google.ai.generativelanguage.v1beta.GenerativeService")
+              p.write_text(s)
+          for rel in [
+              "app/src/main/java/com/myra/assistant/data/GeminiApiClient.kt",
+              "app/src/main/java/com/myra/assistant/provider/GeminiDirectProvider.kt"
+          ]:
+              p = root / rel
+              s = p.read_text().replace('"gemini-3.6-flash", ', '').replace(', "gemini-3.6-flash"', '')
+              p.write_text(s)
+          p = root / "server/server.ts"
+          s = p.read_text().replace('"gemini-3.6-flash",', '')
+          p.write_text(s)
+
+          # 6) Do not restart the SpeechRecognizer wake loop while another app voice session may own the mic.
+          p = root / "app/src/main/java/com/myra/assistant/MainActivity.kt"
+          s = p.read_text()
+          s = s.replace('''    override fun onStop() {
+          super.onStop()
+          // The foreground wake service already exists; resume its listener when the UI leaves foreground.
+          com.myra.assistant.services.MyraWakeWordService.resumeWhenAppBackgrounded(this)
+      }''',
+          '''    override fun onStop() {
+          super.onStop()
+          // Fail closed: SpeechRecognizer is not a dedicated wake-word engine. Keep it paused
+          // until a single-owner microphone lifecycle and dedicated wake model are implemented.
+          com.myra.assistant.services.MyraWakeWordService.pauseForAssistant(this)
+      }''')
+          p.write_text(s)
+
+          print("Applied secure key migration, fail-closed sensitive action checks, honest SOS results, lock-screen blocking, fake-data removal, API throttling, Live endpoint and model fallback updates, and microphone ownership safeguard.")
+          PY
+
       - name: Upload patched MYRA source snapshot
         uses: actions/upload-artifact@v4
         with:
@@ -1039,10 +1322,11 @@ jobs:
             git push origin HEAD:main
           fi
       - name: Build main app
+        if: github.event_name == 'workflow_dispatch' && inputs.build_apk == true
         working-directory: MYRA_SOURCE
         run: ./gradlew :app:clean :app:assembleDebug --no-daemon --stacktrace
       - name: Upload main APK and reports
-        if: always()
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.build_apk == true
         uses: actions/upload-artifact@v4
         with:
           name: MYRA-Main-APK-or-Build-Logs
