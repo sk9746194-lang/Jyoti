@@ -1,8 +1,10 @@
 name: Build MYRA APKs
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 permissions:
   contents: write
