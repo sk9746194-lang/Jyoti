@@ -703,14 +703,18 @@ jobs:
           if 'put("tools", GeminiApiClient.getToolsDeclarationJson())' not in s:
               marker = """                })
                       })
-                  })
-                  ws.send(setupPayload.toString())"""
+              })"""
+              marker = """                })
+            })
+        }
+        ws.send(setupPayload.toString())"""
               insert = """                })
-                      put("tools", GeminiApiClient.getToolsDeclarationJson())
-                      put("inputAudioTranscription", JSONObject())
-                      put("outputAudioTranscription", JSONObject())
-                  })
-                  ws.send(setupPayload.toString())"""
+                put("tools", GeminiApiClient.getToolsDeclarationJson())
+                put("inputAudioTranscription", JSONObject())
+                put("outputAudioTranscription", JSONObject())
+            })
+        }
+        ws.send(setupPayload.toString())"""
               if marker not in s: raise SystemExit("Gemini Live setup closing anchor missing")
               s = s.replace(marker, insert, 1)
 
