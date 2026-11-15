@@ -108,6 +108,45 @@ jobs:
           main.write_text(s)
           print("Chat quick actions wired to existing Vision AI and Automation screens.")
           PY
+      - name: Fix misleading Voice Live indicator
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("MYRA_SOURCE/app/src/main/java/com/myra/assistant/ui/screens/MainVoiceScreen.kt")
+          s = p.read_text()
+          old = """                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(AccentEmerald)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Live",
+                            color = AccentEmerald,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )"""
+          new = """                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(if (voiceStatus.fallbackActive) LightBlue else AccentEmerald)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (voiceStatus.fallbackActive) "Local" else "Gemini Live",
+                            color = if (voiceStatus.fallbackActive) LightBlue else AccentEmerald,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )"""
+          if new not in s:
+              if old not in s:
+                  raise SystemExit("Voice Live indicator source anchor missing; no blind replacement made")
+              s = s.replace(old, new, 1)
+          p.write_text(s)
+          print("Voice header now matches active speech engine instead of always claiming Live.")
+          PY
       - name: Align dependencies and repair MYRA source
         run: |
           python3 - <<'PY'
