@@ -464,6 +464,18 @@ jobs:
 
           # Earlier patch attempts could be applied repeatedly to an already
           # patched ZIP. Collapse duplicate declarations and repeated edits.
+          wake = Path("app/src/main/java/com/myra/assistant/services/MyraWakeWordService.kt")
+          ws = wake.read_text()
+          seen = set()
+          kept = []
+          for line in ws.splitlines():
+              stripped = line.strip()
+              if stripped.startswith("const val ACTION_PAUSE_LISTENING =") or stripped.startswith("const val ACTION_RESUME_LISTENING ="):
+                  if stripped in seen:
+                      continue
+                  seen.add(stripped)
+              kept.append(line)
+          wake.write_text("\n".join(kept) + "\n")
           p = Path("app/src/main/java/com/myra/assistant/security/SecureKeyStorage.kt")
           s = p.read_text()
           line = '        private const val KEY_HUGGING_FACE_TOKEN = "encrypted_hugging_face_read_token"'
