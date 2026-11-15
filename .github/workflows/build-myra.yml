@@ -1090,24 +1090,24 @@ jobs:
           new_wa = '''                    whatsAppAutomation.handleWhatsAppCommand(target, msg, autoSend = false) { }'''
           s = s.replace(old_wa, new_wa, 1)
           # SOS only reports what Android actually accepted; it cannot claim a connected call.
-          new_sos = "\\n".join([
+          new_sos = "\n".join([
               "            CommandIntent.EMERGENCY_SOS -> {",
-              "                val emergencyCall = phoneControl.handleCallCommand(\\\"112\\\")",
+              "                val emergencyCall = phoneControl.handleCallCommand(\\"112\\")",
               "                val flashlight = deviceControl.toggleFlashlight(true)",
-              "                val details = \\\"112 dialer: \\${if (emergencyCall.success) \\\"opened\\\" else \\\"failed\\\"}; flashlight: \\${if (flashlight.success) \\\"on\\\" else \\\"failed\\\"}\\\"",
+              "                val details = \\"112 dialer: ${if (emergencyCall.success) \\"opened\\" else \\"failed\\"}; flashlight: ${if (flashlight.success) \\"on\\" else \\"failed\\"}\\"",
               "                if (emergencyCall.success || flashlight.success) {",
               "                    com.myra.assistant.tools.CommandResult.success(",
-              "                        \\\"SOS प्रयास: \\${if (emergencyCall.success) \\\"112 dialer खुला है (कॉल कनेक्ट होने की पुष्टि नहीं है)\\\" else \\\"112 dialer नहीं खुला\\\"}; \\${if (flashlight.success) \\\"फ्लैशलाइट चालू है\\\" else \\\"फ्लैशलाइट चालू नहीं हो सकी\\\"}।\\\",",
-              "                        target = \\\"emergency\\\",",
+              "                        \\"SOS प्रयास: ${if (emergencyCall.success) \\"112 dialer खुला है (कॉल कनेक्ट होने की पुष्टि नहीं है)\\" else \\"112 dialer नहीं खुला\\"}; ${if (flashlight.success) \\"फ्लैशलाइट चालू है\\" else \\"फ्लैशलाइट चालू नहीं हो सकी\\"}।\\",",
+              "                        target = \\"emergency\\",",
               "                        detail = details",
               "                    )",
               "                } else {",
-              "                    com.myra.assistant.tools.CommandResult.failed(\\\"SOS असफल: 112 dialer नहीं खुला और फ्लैशलाइट भी चालू नहीं हुई।\\\", target = \\\"emergency\\\", detail = details)",
+              "                    com.myra.assistant.tools.CommandResult.failed(\\"SOS असफल: 112 dialer नहीं खुला और फ्लैशलाइट भी चालू नहीं हुई।\\", target = \\"emergency\\", detail = details)",
               "                }",
               "            }"
           ])
-          pattern = r'            CommandIntent\\.EMERGENCY_SOS -> \\{.*?            \\}\\n            CommandIntent\\.TOGGLE_TORCH'
-          s, sos_matches = re.subn(pattern, new_sos + "\\n            CommandIntent.TOGGLE_TORCH", s, count=1, flags=re.S)
+          pattern = r'            CommandIntent\.EMERGENCY_SOS -> \{.*?            \}\n            CommandIntent\.TOGGLE_TORCH'
+          s, sos_matches = re.subn(pattern, new_sos + "\n            CommandIntent.TOGGLE_TORCH", s, count=1, flags=re.S)
           if sos_matches != 1:
               raise SystemExit("MainActivity SOS branch not found")
           p.write_text(s)
