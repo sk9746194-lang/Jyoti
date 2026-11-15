@@ -484,10 +484,8 @@ jobs:
 
           p = Path("app/src/main/java/com/myra/assistant/offline/OfflineCommandEngine.kt")
           s = p.read_text()
-          s = s.replace("appLauncher.launchAppByName(appName).success.success",
-                        "appLauncher.launchAppByName(appName)")
-          s = s.replace("appLauncher.launchAppByName(appName).success",
-                        "appLauncher.launchAppByName(appName)")
+          s = re.sub(r'val launched = appLauncher\\.launchAppByName\\(appName\\)(?:\\.success)*',
+                     'val launched = appLauncher.launchAppByName(appName).success', s)
           p.write_text(s)
 
           print("Repeated patch declarations normalized.")
